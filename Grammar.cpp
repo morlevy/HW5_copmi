@@ -33,7 +33,6 @@ inline namespace grammar{
             case TN_STR: return "STRING";
             default: return "ERROR";
         }
-
     }
 
     void end_function(){
@@ -44,6 +43,17 @@ inline namespace grammar{
     void startScope() {
         symbol_table->scopes.emplace_back();
         symbol_table->offset_stack.push_back(symbol_table->offset_stack.back());
+    }
+
+    std::string convert_type_llvm(Typename t){
+        switch (t) {
+            case TN_BOOL: return "i1";
+            case TN_BYTE: return "i8";
+            case TN_VOID: return "void";
+            case TN_INT: return "i32";
+            case TN_STR: return "i8*";
+            default: return "ERROR";
+        }
     }
 
     void closeScope(){
@@ -137,7 +147,7 @@ inline namespace grammar{
         }
 
         types.emplace_back(ret_type->type);
-        symbol_table->scopes.back().symbols.push_back(new  SymbolTable::SymbolData(0, name, types));
+        symbol_table->scopes.back().symbols.push_back(new  SymbolTable::SymbolData(0, name, types,""));
         if(curr_scope == 0){
             symbol_table->global_functions.emplace_back(yylineno,name,types);
         }
@@ -145,7 +155,7 @@ inline namespace grammar{
         startScope();
         current_function = id->name;
         for(int i = 0 ; i < formulas->formals.size(); i++){
-            symbol_table->scopes.back().symbols.push_back(new SymbolTable::SymbolData(-i-1 ,formulas->formals[i]->name, formulas->formals[i]->type));
+            symbol_table->scopes.back().symbols.push_back(new SymbolTable::SymbolData(-i-1 ,formulas->formals[i]->name, formulas->formals[i]->type,""));
         }
     }
 
@@ -181,7 +191,7 @@ inline namespace grammar{
             output::errorDef(yylineno,id->name);
             exit(0);
         }
-        symbol_table->scopes.back().symbols.emplace_back(new SymbolTable::SymbolData(symbol_table->offset_stack.back()++,id->name, type->type));
+        symbol_table->scopes.back().symbols.emplace_back(new SymbolTable::SymbolData(symbol_table->offset_stack.back()++,id->name, type->type,""));
     }
     Statement::Statement(Type* type, Id* id, Exp*  exp) {
         if (!canImplicitlyAssign(*exp, *type)) {
@@ -192,8 +202,30 @@ inline namespace grammar{
             output::errorDef(yylineno,id->name);
             exit(0);
         }
-        symbol_table->scopes.back().symbols.emplace_back(new SymbolTable::SymbolData(symbol_table->offset_stack.back()++,id->name, type->type));
+        this->value = generate_register->nextRegister();
+        std::string expReg = exp->reg;
+        if(type->type == TN_INT && exp->type == TN_BYTE){
+            expReg = generate_register->nextRegister();
+            code_buffer.emit("%" + expReg + " = zext i8 %" + exp->reg + " to i32");
+        }
+        code_buffer.emit("%" + this->value + " = add " + convert_type_llvm(exp->type) + " 0,%" + expReg);
+        int offset = symbol_table->offset_stack.back()++;
+        string ptr = generate_register->nextRegister();
+        code_buffer.emit("%" + ptr +
+                    " = getelementptr [50 x i32], [50 x i32]* %stack, i32 0, i32 " +
+                    to_string(offset));
+        expReg = this->value;
+        if (exp->type != TN_INT) {
+            //%X = zext i8 %t3 to i32
+            expReg = generate_register->nextRegister();
+            code_buffer.emit(
+                    "%" + expReg + " = zext " + convert_type_llvm(exp->type) + " %" + this->value + " to i32");
+        }
+        code_buffer.emit("store i32 %" + expReg + ", i32* %" + ptr);
+        exp->reg = expReg;
+        symbol_table->scopes.back().symbols.emplace_back(new SymbolTable::SymbolData(offset,id->name, type->type,expReg));
     }
+
     Statement::Statement(Id*  id, Assign*  assign, Exp*  exp)  {
         SymbolTable::SymbolData* symbol_type = symbol_table->getSymbol(id->name);
         if(symbol_type == nullptr){
@@ -209,7 +241,8 @@ inline namespace grammar{
             output::errorMismatch(yylineno);
             exit(0);
         }
-        
+        symbol_type->setRegister(exp->reg);
+        //this->value = generate_register->nextRegister();
 
     }
     Statement::Statement(Call*  call)  {
@@ -332,13 +365,14 @@ inline namespace grammar{
             exit(0);
         }
         type = symbol_data_opt->getTypes().back(); //maybe front?
+        this->reg = symbol_data_opt->getRegister();
     }
     Exp::Exp(Call*  call) : Typeable(call->type){
         
     }
     Exp::Exp(Num*  num) : Typeable(TN_INT), value(to_string(num->value)) {
-        this->reg = generate_register->nextRegister();
-        code_buffer.emit("%" + this->reg + " = add i32 0," + value);
+        //this->reg = generate_register->nextRegister();
+        //code_buffer.emit("%" + this->reg + " = add i32 0," + value);
     }
 
     Exp::Exp(Num*  num, B*  b) : Typeable(TN_BYTE), value(to_string(num->value)) {
@@ -350,11 +384,15 @@ inline namespace grammar{
         code_buffer.emit("%" + this->reg + " = add i8 0," + value);
     }
     Exp::Exp(String*  str) : Typeable(TN_STR) {
+        this->reg = generate_register->nextRegister();
     }
     Exp::Exp(Boolean*  boolean) : Typeable(TN_BOOL) {
+        this->reg = generate_register->nextRegister();
+
     }
     Exp::Exp(Not*  _not, Exp*  exp) : Typeable(TN_BOOL) {
         TypeAssert(exp, TN_BOOL);
+        this->reg = generate_register->nextRegister();
     }
     Exp::Exp(Exp*  exp1, And*  _and, Exp*  exp2) : Typeable(TN_BOOL) {
         TypeAssert(exp1, TN_BOOL);
@@ -371,12 +409,14 @@ inline namespace grammar{
             output::errorMismatch(yylineno);
             exit(0);
         }
+
     }
     Exp::Exp(Type*  type, Exp*  exp) : Typeable(type->type) {
         if(!canExplicitlyAssign(exp->type, type->type)){
             output::errorMismatch(yylineno);
             exit(0);
         }
+        this->reg = generate_register->nextRegister();
     }
 
     Exp::Exp(Exp * exp) : Typeable(exp->type){
@@ -402,7 +442,7 @@ inline namespace grammar{
             exit(0);
         }
         this->reg = generate_register->nextRegister();
-        string reg_left, reg_right;
+        string reg_left = exp1->reg, reg_right = exp2->reg;
         this->type = TN_BYTE;
         string exp_size = "i8";
         if (exp1->type == TN_INT || exp2->type == TN_INT) {
@@ -417,12 +457,13 @@ inline namespace grammar{
                 code_buffer.emit("%" + reg_right + " = zext i8 %" + exp2->reg + " to i32");
             }
         }
-
-        if(binop->value == Binop::MUL || binop->value == Binop::ADD)
-            code_buffer.emit("%" + this->reg + " = " + binop->lexeme + " " + exp_size + " %" + reg_left + ", %" + reg_right);
-        else{//div and sub
+        std::string op1;
+        if(binop->value == Binop::MUL || binop->value == Binop::ADD) {
+            op1 = binop->value == Binop::MUL ? "mul" : "add";
+            code_buffer.emit("%" + this->reg + " = " + op1 + " " + exp_size + " %" + reg_left + ", %" + reg_right);
+        }else{//div and sub
             //something
-
+            //op1 = binop->value == Binop::DIV ? "sdiv" : "sub";
         }
 
 

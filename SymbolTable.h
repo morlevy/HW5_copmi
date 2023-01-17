@@ -22,15 +22,18 @@ public:
         const int offset;
         std::string name;
         std::vector<Typename> types;
+        std::string reg;
 
     public:
         SymbolData() = delete;
-        SymbolData(int offset, std::string name, std::vector<Typename> types);
-        SymbolData(int offset, std::string name, Typename type);
+        SymbolData(int offset, std::string name, std::vector<Typename> types, std::string reg);
+        SymbolData(int offset, std::string name, Typename type, std::string reg);
         [[nodiscard]] int getOffset() const;
         [[nodiscard]] const std::string &getName() const;
         [[nodiscard]] std::vector<Typename> getTypes() const;
         void setType(Typename type_name);
+        const std::string &getRegister() const;
+        void setRegister(std::string reg1);
     };
 
     struct Scope {

@@ -50,7 +50,7 @@ using namespace output;
 
 %%
 //Derivation Rules:
-Program_     : {  $$ = new Program(); } Funcs_  {if(yychar == YYEOF){  endProgram();} };
+Program_     : {  $$ = new Program(); std::cout << "start program\n"; } Funcs_  {if(yychar == YYEOF){  endProgram();} };
 Funcs_       : FuncDecl_ Funcs_ { $$ = new Funcs(); }
             | {$$ = new Funcs( );};
 FuncDecl_    : RelType_ ID LPAREN Formals_ RPAREN { $$ = new FuncDecl( static_cast<RetType *>($1),static_cast<Id *>($2),static_cast<Formals *>($4));} LBRACE Statements_ { end_function();} RBRACE ;

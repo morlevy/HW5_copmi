@@ -29,10 +29,17 @@ void SymbolTable::addNewSymbol(int statement_num, const std::string &name, Typen
         output::errorDef(0, name); //TODO
     }
     Scope &scope = scopes.empty() ? global_scope : *scopes.rend();
-    auto symbol = new SymbolData(statement_num, name, vector<Typename>{type});
+    auto symbol = new SymbolData(statement_num, name, vector<Typename>{type},"");
     scopes.back().symbols.push_back(symbol);
 }
 
+const std::string& SymbolTable::SymbolData::getRegister() const{
+    return reg;
+}
+
+void SymbolTable::SymbolData::setRegister(std::string reg1){
+    this->reg = std::move(reg1);
+}
 
 SymbolTable::SymbolData* SymbolTable::getSymbol(const std::string &name) const noexcept {
     for ( auto scope: scopes) {
@@ -62,8 +69,8 @@ bool SymbolTable::isSymbolExists(const std::string &name) const noexcept {
 
 SymbolTable::SymbolTable() noexcept {
     scopes.emplace_back();
-    scopes.back().symbols.push_back(new SymbolData(0, "print", std::vector<Typename>{ TN_STR , TN_VOID}));
-    scopes.back().symbols.push_back(new SymbolData(0, "printi", std::vector<Typename>{ TN_INT , TN_VOID}));
+    scopes.back().symbols.push_back(new SymbolData(0, "print", std::vector<Typename>{ TN_STR , TN_VOID},""));
+    scopes.back().symbols.push_back(new SymbolData(0, "printi", std::vector<Typename>{ TN_INT , TN_VOID},""));
     global_functions.emplace_back(-1, "print", std::vector<Typename>{ TN_STR , TN_VOID});
     global_functions.emplace_back(-1, "printi", std::vector<Typename>{ TN_INT , TN_VOID});
     offset_stack.emplace_back(0);
@@ -81,8 +88,8 @@ const SymbolTable::FunctionSymbolData* SymbolTable::getFunctionSymbol(const stri
 }
 
 
-SymbolTable::SymbolData::SymbolData(int offset, std::string name, std::vector<Typename> types) : offset(offset),
-                                                                                     name(std::move(name)), types(std::move(types)) {
+SymbolTable::SymbolData::SymbolData(int offset, std::string name, std::vector<Typename> types, std::string reg) : offset(offset),
+                                                                                     name(std::move(name)), types(std::move(types)) , reg(reg){
 
 }
 
@@ -98,7 +105,8 @@ vector<Typename> SymbolTable::SymbolData::getTypes() const {
     return types;
 }
 
-SymbolTable::SymbolData::SymbolData(int offset, std::string name, Typename type): offset(offset),name(name),types(std::vector<Typename>{type}) {
+SymbolTable::SymbolData::SymbolData(int offset, std::string name, Typename type, std::string reg): offset(offset),name(name),types(std::vector<Typename>{type}),reg(reg) {
+
 }
 
 
