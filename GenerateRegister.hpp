@@ -13,7 +13,7 @@ class GenerateRegister {
     public:
     GenerateRegister():counter(0){}
     string nextRegister(){
-        std::cout << "create register " << counter << std::endl;
+        //std::cout << "create register " << counter << std::endl;
         return "t" + to_string(counter++);
     }
 };

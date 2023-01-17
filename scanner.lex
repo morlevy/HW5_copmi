@@ -57,7 +57,9 @@ continue                                            yylval = new Continue(); ret
 "=="|"!="                                           yylval = new Relop(yytext); return RELOP;
 "<"|">"|"<="|">="                                   yylval = new Relop(yytext); return RELOP2;
 =                                                   yylval = new Assign(); return ASSIGN;
-"+"|"-"|"*"|"/"                                     yylval = new Binop(*yytext); return BINOP;
+"+"                                                 yylval = new Binop(*yytext); return ADD;
+"*"                                                 yylval = new Binop(*yytext); return MUL;
+"-"|"/"                                             yylval = new Binop(*yytext); return BINOP;
 [a-zA-Z]([a-zA-Z0-9]*)                              yylval = new Id(yytext); return ID;
 {digits}                                            yylval = new Num(std::stoi(yytext)); return NUM;
 \"([^\n\r\"\\]|\\[rnt\"\\])+\"                      yylval = new String(yytext); return STRING;

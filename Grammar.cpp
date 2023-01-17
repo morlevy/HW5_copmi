@@ -16,6 +16,7 @@ GenerateRegister *generate_register = new GenerateRegister();
 int curr_scope = 0;
 string current_function;
 int while_ = 0;
+int num_args = 0;
 
 inline namespace grammar{
     
@@ -54,6 +55,23 @@ inline namespace grammar{
             case TN_STR: return "i8*";
             default: return "ERROR";
         }
+    }
+
+    std::string loadRegister(int offset, Typename type){
+        std::string reg = generate_register->nextRegister();
+        std::string ptr = generate_register->nextRegister();
+        if(offset < 0){
+            code_buffer.emit("%" + ptr + " = getelementptr [ " + to_string(num_args) + " x i32], [ " + to_string(num_args) + " x i32]* %args, i32 0, i32 " + to_string(num_args + offset));
+        } else {
+            code_buffer.emit("%" + ptr + " = getelementptr [ 50 x i32], [ 50 x i32]* %stack, i32 0, i32 " + to_string(offset));
+        }
+        code_buffer.emit("%" + reg + " = load i32, i32* %" + ptr);
+        if(type != TN_INT){
+            std::string reg2 = generate_register->nextRegister();
+            code_buffer.emit("%" + reg2 + " = trunc i32 %" + reg + " to " + convert_type_llvm(type));
+            return reg2;
+        }
+        return reg;
     }
 
     void closeScope(){
@@ -356,6 +374,7 @@ inline namespace grammar{
 
     Exp::Exp(Id*  id) : Typeable(TN_VOID){
         const auto& symbol_data_opt = symbol_table->getSymbol(id->name);
+        //std::cout <<"id is: "<< id->name << " type: " << symbol_data_opt->getTypes().back() << std::endl;
         if(symbol_data_opt == nullptr){
             output::errorUndef(yylineno,id->name);
             exit(0);
@@ -364,15 +383,17 @@ inline namespace grammar{
             output::errorUndef(yylineno,id->name);
             exit(0);
         }
-        type = symbol_data_opt->getTypes().back(); //maybe front?
-        this->reg = symbol_data_opt->getRegister();
+        this->type = symbol_data_opt->getTypes().back();
+        this->value = symbol_data_opt->getName();
+        this->reg = loadRegister(symbol_data_opt->getOffset() , symbol_data_opt->getTypes().back());
     }
     Exp::Exp(Call*  call) : Typeable(call->type){
         
     }
     Exp::Exp(Num*  num) : Typeable(TN_INT), value(to_string(num->value)) {
-        //this->reg = generate_register->nextRegister();
-        //code_buffer.emit("%" + this->reg + " = add i32 0," + value);
+        //std::cout << "type is " << type << std::endl;
+        this->reg = generate_register->nextRegister();
+        code_buffer.emit("%" + this->reg + " = add i32 0, " + value);
     }
 
     Exp::Exp(Num*  num, B*  b) : Typeable(TN_BYTE), value(to_string(num->value)) {
@@ -383,16 +404,24 @@ inline namespace grammar{
         this->reg = generate_register->nextRegister();
         code_buffer.emit("%" + this->reg + " = add i8 0," + value);
     }
-    Exp::Exp(String*  str) : Typeable(TN_STR) {
+    Exp::Exp(String*  str) : Typeable(TN_STR), value(str->value) {
         this->reg = generate_register->nextRegister();
+        code_buffer.emitGlobal("@" + reg + "= constant [" + to_string(value.size()) + " x i8] c\"" + value + "\"");
+        code_buffer.emit("%" + reg + "= getelementptr [" + to_string(value.size()) + " x i8], [" + to_string(value.size()) + " x i8]* @" + reg + ", i8 0, i8 0");
     }
-    Exp::Exp(Boolean*  boolean) : Typeable(TN_BOOL) {
+    Exp::Exp(Boolean*  boolean) : Typeable(TN_BOOL), value(to_string(boolean->value)) {
         this->reg = generate_register->nextRegister();
-
+        code_buffer.emit("%" + this->reg + " = add i1 0," + value);
     }
     Exp::Exp(Not*  _not, Exp*  exp) : Typeable(TN_BOOL) {
         TypeAssert(exp, TN_BOOL);
+        if(exp->value == "0"){
+            this->value = "1";
+        } else{
+            this->value = "0";
+        }
         this->reg = generate_register->nextRegister();
+        code_buffer.emit("%" + this->reg + " = add i1 1," + exp->reg);
     }
     Exp::Exp(Exp*  exp1, And*  _and, Exp*  exp2) : Typeable(TN_BOOL) {
         TypeAssert(exp1, TN_BOOL);
@@ -439,10 +468,13 @@ inline namespace grammar{
     Exp::Exp(Exp *exp1, Binop *binop, Exp *exp2) : Typeable(exp1->type == TN_BYTE && exp2->type == TN_BYTE ? TN_BYTE : TN_INT){
         if(!isNumeric(exp1->type) ||!isNumeric(exp2->type)){
             output::errorMismatch(yylineno);
+            //std::cout << "exp1 type: " << exp1->type << " exp2 type: " << exp2->type << "\n";
             exit(0);
         }
+        //cout << "regs: " << exp1->reg << " " << exp2->reg << endl;
         this->reg = generate_register->nextRegister();
-        string reg_left = exp1->reg, reg_right = exp2->reg;
+        string reg_left = exp1->reg;
+        string reg_right = exp2->reg;
         this->type = TN_BYTE;
         string exp_size = "i8";
         if (exp1->type == TN_INT || exp2->type == TN_INT) {

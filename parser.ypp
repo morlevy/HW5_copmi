@@ -39,6 +39,8 @@ using namespace output;
 %left AND;
 %left RELOP;
 %nonassoc RELOP2;
+%left ADD;
+%left MUL;
 %left BINOP;
 %right NOT;
 %left RPAREN;
@@ -84,7 +86,8 @@ Type_        : INT { $$ = new Type( TN_INT ); }
             | BOOL { $$ = new Type( TN_BOOL ); };
 Exp_         : LPAREN Exp_ RPAREN { $$ = new Exp( static_cast<Exp *>($2)); }
             | %prec PRECX Exp_ IF LPAREN Exp_ RPAREN ELSE Exp_ { $$ = new Exp(static_cast<Exp *>($1),static_cast<If *>($2),static_cast<Exp *>($4),static_cast<Else *>($6),static_cast<Exp *>($7));};
-            | Exp_ BINOP Exp_ { $$ = new Exp( static_cast<Exp *>($1),static_cast<Binop *>($2),static_cast<Exp *>($3)); }
+            | Exp_ ADD Exp_ { $$ = new Exp( static_cast<Exp *>($1),static_cast<Binop *>($2),static_cast<Exp *>($3)); }
+            | Exp_ MUL Exp_ { $$ = new Exp( static_cast<Exp *>($1),static_cast<Binop *>($2),static_cast<Exp *>($3)); }
             | ID { $$ = new Exp( static_cast<Id *>($1)); }
             | Call_ { $$ = new Exp( static_cast<Call *>($1)); }
             | NUM { $$ = new Exp( static_cast<Num *>($1)); }
