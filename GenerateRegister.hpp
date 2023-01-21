@@ -4,6 +4,8 @@
 #include <string>
 #include <iostream>
 
+# pragma once
+
 using namespace std;
 
 class GenerateRegister {
@@ -11,10 +13,10 @@ class GenerateRegister {
     int counter;
 
     public:
-    GenerateRegister():counter(0){}
-    string nextRegister(){
+    GenerateRegister() : counter(0) {}
+    string nextRegister(const string& prefix = ""){
         //std::cout << "create register " << counter << std::endl;
-        return "t" + to_string(counter++);
+        return prefix + string{prefix.empty() ? "" : "_"} + "t" + to_string(counter++);
     }
 };
 

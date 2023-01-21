@@ -1,6 +1,8 @@
-cmake_minimum_required(VERSION 3.21)
+cmake_minimum_required(VERSION 3.16)
 project(HW5)
 
 set(CMAKE_CXX_STANDARD 17)
 
-add_executable(HW5 main.cpp)
+file(GLOB my_files "*.h" "*.hpp" "*.cpp")
+
+add_executable(HW5 ${my_files})

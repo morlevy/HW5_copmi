@@ -16,7 +16,7 @@ extern int yylineno;
 
 inline namespace grammar{
 
-    bool idInSymbolTable(std::string id);
+    bool idInSymbolTable(const std::string& id);
     void endProgram();
     void closeScope();
     void startScope();
@@ -110,6 +110,7 @@ inline namespace grammar{
     struct Exp : public Node, public Typeable {
         std::string value;
         std::string reg;
+
         explicit Exp(Id*);
         explicit Exp(Call*);
         explicit Exp(Num*);
@@ -117,7 +118,7 @@ inline namespace grammar{
         explicit Exp(String*);
         explicit Exp(Boolean*);
         Exp(Exp*);
-        Exp(std::string , Exp*);
+        Exp(const std::string& , Exp*);
         Exp(Exp* , If*, Exp*, Else*, Exp*);
         Exp(Exp*, Binop*, Exp*);
         Exp(Not*, Exp*);
