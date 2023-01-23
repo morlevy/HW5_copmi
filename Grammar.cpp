@@ -280,7 +280,9 @@ inline namespace grammar {
     }
 
     Statements::Statements(Statement *statement) {
+        cout << "statement next list size: " << statement->next_list.size() << endl;
         this->next_list = statement->next_list;
+        cout << "statement2" << endl;
     }
 
     Statements::Statements(Statements *statements, Statement *statement, Label* label) {
@@ -351,7 +353,7 @@ inline namespace grammar {
 
     }
 
-    Statement::Statement(Call *call) {
+    Statement::Statement(Call *call): next_list({}) {
 
     }
 
@@ -379,16 +381,19 @@ inline namespace grammar {
 
     Statement::Statement(If *if_, Exp *exp,Label* label, Statement* statement) {
         TypeAssert(exp, TN_BOOL);
+        cout << "if" << endl;
         code_buffer.bpatch(exp->true_list, label->label_name);
+        cout << "arrived here 1\n";
         this->next_list = CodeBuffer::merge(exp->false_list, statement->next_list);
+        cout << "arrived here 2\n";
     }
 
     Statement::Statement(If *_if, Exp *exp,Label* label1,Statement* statement1,N* n, Else *_else, Label* label2, Statement* statement2) {
         TypeAssert(exp, TN_BOOL);
         code_buffer.bpatch(exp->true_list, label1->label_name);
         code_buffer.bpatch(exp->false_list, label2->label_name);
-        auto temp = CodeBuffer::merge(statement1->next_list, n->next_list);
-        this->next_list = CodeBuffer::merge(temp, statement2->next_list);
+        this->next_list = CodeBuffer::merge(CodeBuffer::merge(statement1->next_list, n->next_list), statement2->next_list);
+        cout << "arrived here 6\n" << "and next list size is " << this->next_list.size() << endl;
     }
 
     Statement::Statement(While *_while, Exp *exp) {
@@ -418,7 +423,9 @@ inline namespace grammar {
     }
 
     Statement::Statement(Statements *s) {
+        cout << "arrived here 4 size is: " << s->next_list.size() << endl;
         this->next_list = s->next_list;
+        cout << "arrived here 5\n";
     }
 
     Call::Call(Id *id, ExpList *expList) : Typeable(TN_VOID) {
@@ -529,10 +536,11 @@ inline namespace grammar {
         this->true_list = {};
         if(boolean->value){
             this->true_list = list;
+            cout << "true\n";
         } else {
             this->false_list = list;
         }
-
+        cout << "arrived here3\n";
     }
 
     Exp::Exp(Not *_not, Exp *exp) : Typeable(TN_BOOL) {
@@ -623,10 +631,10 @@ inline namespace grammar {
             exit(0);
         }
         this->reg = generate_register->nextRegister();
-        code_buffer.emit("relop value: " + to_string((relop->value)));
+        //code_buffer.emit("relop value: " + to_string((relop->value)));
         currinstr = code_buffer.emit("%" + this->reg + " = icmp " + convert_to_llvm_relop(relop->value) + " i32 %" + exp1->reg + ", %" + exp2->reg);
-        this->true_list = CodeBuffer::makelist({currinstr+1,FIRST});
-        this->false_list = CodeBuffer::makelist({currinstr+1,SECOND});
+        this->true_list = CodeBuffer::makelist({currinstr,FIRST});
+        this->false_list = CodeBuffer::makelist({currinstr,SECOND});
         code_buffer.emit("br i1 %" + this->reg + ", label @, label @");
     }
 
@@ -712,8 +720,9 @@ inline namespace grammar {
         currinstr = code_buffer.emit("%" + this->reg + " = " + op + " " + exp_size + " %" + reg_left + ", %" + reg_right);
     }
 
-    Exp::Exp(const string& x, Exp *exp) : Typeable(TN_BOOL) {
+    Exp::Exp(const string& x, Exp *exp) : Typeable(TN_BOOL), reg(exp->reg), false_list(exp->false_list), true_list(exp->true_list) {
         TypeAssert(exp, TN_BOOL);
+        cout << "not exp" << endl;
     }
 
     void end_function(RetType* ret) {
