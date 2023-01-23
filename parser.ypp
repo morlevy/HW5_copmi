@@ -11,6 +11,7 @@
     extern int yyerror(const char*);
     extern int yylineno;
     using namespace output;
+    Label* label;
 %}
 //Terminals: %token, %left, %right, %nonassoc
 %nonassoc PRECX;
@@ -54,10 +55,10 @@
 
 %%
 //Derivation Rules:
-Program_     : {  $$ = new Program(); std::cout << "start program\n"; } Funcs_  {if(yychar == YYEOF){  endProgram();} };
+Program_     : {  $$ = new Program();  } Funcs_  {if(yychar == YYEOF){  endProgram();} };
 Funcs_       : FuncDecl_ Funcs_ { $$ = new Funcs(); }
             | {$$ = new Funcs( );};
-FuncDecl_    : RelType_ ID LPAREN Formals_ RPAREN { $$ = new FuncDecl( static_cast<RetType *>($1),static_cast<Id *>($2),static_cast<Formals *>($4));} LBRACE Statements_ { end_function();} RBRACE ;
+FuncDecl_    : RelType_ ID LPAREN Formals_ RPAREN { $$ = new FuncDecl( static_cast<RetType *>($1),static_cast<Id *>($2),static_cast<Formals *>($4));} LBRACE Statements_ { end_function(static_cast<RetType *>($1));} RBRACE ;
 RelType_     : Type_ {$$ = new RetType( static_cast<Type *>($1)->type); }
             | VOID { $$ = new RetType( TN_VOID); }
 Formals_    : FormalsList_ { $$ = new Formals( static_cast<FormalsList *>($1)); }
@@ -102,8 +103,8 @@ Exp_         : LPAREN Exp_ RPAREN { $$ = new Exp( static_cast<Exp *>($2)); }
             | NOT Exp_ { $$ = new Exp( static_cast<Not *>($1),static_cast<Exp *>($2)); }
             | Exp_ RELOP Exp_ {$$ = new Exp( static_cast<Exp *>($1),static_cast<Relop *>($2),static_cast<Exp *>($3)); }
             | Exp_ RELOP2 Exp_ { $$ = new Exp( static_cast<Exp *>($1),static_cast<Relop *>($2),static_cast<Exp *>($3)); }
-            | Exp_ AND Exp_ { $$ = new Exp( static_cast<Exp *>($1),static_cast<And *>($2),static_cast<Exp *>($3)); }
-            | Exp_ OR Exp_ { $$ = new Exp( static_cast<Exp *>($1),static_cast<Or *>($2),static_cast<Exp *>($3)); }
+            | Exp_ AND {label = new Label(static_cast<Exp *>($1));} Exp_ { $$ = new Exp( static_cast<Exp *>($1),static_cast<And *>($2),static_cast<Exp *>($4),label); }
+            | Exp_ OR {label = new Label(static_cast<Exp *>($1));} Exp_ { $$ = new Exp( static_cast<Exp *>($1),static_cast<Or *>($2),static_cast<Exp *>($4),label); }
             | LPAREN Type_ RPAREN Exp_ { $$ = new Exp( static_cast<Type *>($2),static_cast<Exp *>($4)); };
 
 M :         {startScope();}
@@ -115,7 +116,6 @@ int yyerror(const char* erxt){
     errorSyn(yylineno);
     exit(0);
 }
-
 int main(){
     return yyparse();
 }

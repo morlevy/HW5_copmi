@@ -15,6 +15,7 @@ CodeBuffer& code_buffer = CodeBuffer::instance();
 GenerateRegister *generate_register = new GenerateRegister();
 int curr_scope = 0;
 string current_function;
+
 int while_ = 0;
 int num_args = 0;
 
@@ -22,6 +23,25 @@ inline namespace grammar {
 
     Program::Program() {
         symbol_table = new SymbolTable();
+        code_buffer.emitGlobal("declare i32 @printf(i8*, ...)");
+        code_buffer.emitGlobal("declare void @exit(i32)");
+
+        code_buffer.emitGlobal("@.int_specifier = constant [4 x i8] c\"%d\\0A\\00\"");
+        code_buffer.emitGlobal("@.str_specifier = constant [4 x i8] c\"%s\\0A\\00\"");
+        code_buffer.emitGlobal("@DavidThrowsZeroExcp = constant [22 x i8] c\"Error division by zero\"");
+
+        code_buffer.emitGlobal("define void @printi(i32) {");
+        code_buffer.emitGlobal(
+                "call i32 (i8*, ...) @printf(i8* getelementptr ([4 x i8], [4 x i8]* @.int_specifier, i32 0, i32 0), i32 %0)");
+        code_buffer.emitGlobal("ret void");
+        code_buffer.emitGlobal("}");
+
+
+        code_buffer.emitGlobal("define void @print(i8*) {");
+        code_buffer.emitGlobal(
+                "call i32 (i8*, ...) @printf(i8* getelementptr ([4 x i8], [4 x i8]* @.str_specifier, i32 0, i32 0), i8* %0)");
+        code_buffer.emitGlobal("ret void");
+        code_buffer.emitGlobal("}");
         //
     }
 
@@ -42,10 +62,12 @@ inline namespace grammar {
         }
     }
 
-    void end_function() {
-        current_function = "";
-        closeScope();
+    Label::Label(Exp* exp) {
+        label_location = code_buffer.emit("br i1 %" + exp->reg + ", label @, label @");
+        label_name = code_buffer.genLabel();
     }
+
+
 
     void startScope() {
         symbol_table->scopes.emplace_back();
@@ -90,12 +112,12 @@ inline namespace grammar {
     }
 
     void closeScope() {
-        output::endScope();
+        //output::endScope();
         SymbolTable::Scope curr_scope = symbol_table->scopes.back();
         for (auto symbol: curr_scope.symbols) {
             if (symbol->getTypes().size() == 1) { // symbol is var
                 std::string type = convert_type(symbol->getTypes()[0]);
-                output::printID(symbol->getName(), symbol->getOffset(), type);//variables
+                //output::printID(symbol->getName(), symbol->getOffset(), type);//variables
             } else { // symbol is function
                 auto ret_val = convert_type(symbol->getTypes().back());
 
@@ -110,16 +132,17 @@ inline namespace grammar {
                 for (int i = 0; i < types.size(); i++) {
                     str_types.push_back(convert_type(types[i]));// maybe opposite
                 }
-                output::printID(symbol->getName(), symbol->getOffset(), output::makeFunctionType(ret_val,
-                                                                                                 str_types));//function
+                /**output::printID(symbol->getName(), symbol->getOffset(), output::makeFunctionType(ret_val,
+                                                                                                 str_types));//function**/
             }
         }
+        /**
         DO_DEBUG(
                 cout << "______Global:______\n";
                 CodeBuffer::instance().printGlobalBuffer();
                 cout << "______Code:______\n";
                 CodeBuffer::instance().printCodeBuffer();
-        );
+        );**/
         curr_scope.symbols.clear();
         symbol_table->scopes.pop_back();
         symbol_table->offset_stack.pop_back();
@@ -142,6 +165,7 @@ inline namespace grammar {
             exit(0);
         }
         closeScope();
+        code_buffer.printGlobalBuffer();
         code_buffer.printCodeBuffer();
     }
 
@@ -177,15 +201,36 @@ inline namespace grammar {
                 }
             }
         }
+        string return_llvm_type = convert_type_llvm(ret_type->type);
+        string formals_llvm_list;
+        current_function = id->name;
+        num_args = formulas->formals.size();
         name = id->name;
         if (!formulas->formals.empty()) {
             for (auto formal: formulas->formals) {
                 types.push_back(formal->type);
+                formals_llvm_list += convert_type_llvm(formal->type) + ", ";
             }
         } else {
+            formals_llvm_list = "()";
             types.emplace_back(TN_VOID);
         }
-
+        formals_llvm_list = "("+formals_llvm_list.substr(0, formals_llvm_list.size() - 2)+")";
+        code_buffer.emit("define " + return_llvm_type + " @" + id->name + formals_llvm_list + " {");
+        code_buffer.emit("%stack = alloca [50 x i32]");
+        code_buffer.emit("%args = alloca [ " + to_string(num_args) + " x i32]");
+        for (int i = 0; i < formulas->formals.size(); i++) {
+            std::string reg = generate_register->nextRegister();
+            code_buffer.emit("%" + reg + " = getelementptr [ " + to_string(num_args) + " x i32], [ " + to_string(num_args) +
+                             " x i32]* %args, i32 0, i32 " + to_string(num_args - i - 1));
+            if(convert_type_llvm(formulas->formals[i]->type) != "i32"){
+                string new_reg = generate_register->nextRegister();
+                code_buffer.emit("%"+ new_reg + " =zext " + convert_type_llvm(formulas->formals[i]->type) + " %"+ to_string(i) + " to i32");
+                code_buffer.emit("store i32 %"+ new_reg + ", i32* %" + reg);
+            } else {
+                code_buffer.emit("store i32 %" + formulas->formals[i]->name + ", i32* %" + reg);
+            }
+        }
         types.emplace_back(ret_type->type);
         symbol_table->scopes.back().symbols.push_back(new SymbolTable::SymbolData(0, name, types, ""));
         if (curr_scope == 0) {
@@ -198,6 +243,14 @@ inline namespace grammar {
             symbol_table->scopes.back().symbols.push_back(
                     new SymbolTable::SymbolData(-i - 1, formulas->formals[i]->name, formulas->formals[i]->type, ""));
         }
+    }
+
+    void closeFunction(RetType *retType) {
+        string extra = retType->type == TN_VOID ? "" : " 0";
+        code_buffer.emit("ret " + convert_type_llvm(retType->type) + extra);
+        code_buffer.emit("}");
+        current_function = "";
+        num_args = 0;
     }
 
     RetType::RetType(Typename type) : type(type) {
@@ -451,15 +504,16 @@ inline namespace grammar {
 
     Exp::Exp(String *str) : Typeable(TN_STR), value(str->value) {
         this->reg = generate_register->nextRegister();
-        code_buffer.emitGlobal("@" + reg + "= constant [" + to_string(value.size()) + " x i8] c\"" + value + "\"");
+        code_buffer.emitGlobal("@" + reg + "= constant [" + to_string(value.size() - 2) + " x i8] c" + value);
         code_buffer.emit(
-                "%" + reg + "= getelementptr [" + to_string(value.size()) + " x i8], [" + to_string(value.size()) +
+                "%" + reg + "= getelementptr [" + to_string(value.size() - 2 ) + " x i8], [" + to_string(value.size() - 2) +
                 " x i8]* @" + reg + ", i8 0, i8 0");
     }
 
     Exp::Exp(Boolean *boolean) : Typeable(TN_BOOL), value(to_string(boolean->value)) {
         this->reg = generate_register->nextRegister();
         code_buffer.emit("%" + this->reg + " = add i1 0," + value);
+
     }
 
     Exp::Exp(Not *_not, Exp *exp) : Typeable(TN_BOOL) {
@@ -473,18 +527,50 @@ inline namespace grammar {
         code_buffer.emit("%" + this->reg + " = add i1 1," + exp->reg);
     }
 
-    Exp::Exp(Exp *exp1, And *_and, Exp *exp2) : Typeable(TN_BOOL) {
+    Exp::Exp(Exp *exp1, And *_and, Exp *exp2, Label* label) : Typeable(TN_BOOL) {
         TypeAssert(exp1, TN_BOOL);
         TypeAssert(exp2, TN_BOOL);
+
+
+        this->reg = generate_register->nextRegister();
+        this->false_list = vector<pair<int, BranchLabelIndex>>();
+        this->true_list = vector<pair<int, BranchLabelIndex>>();
+
+        int false_location = code_buffer.emit("br label @");
+        string false_label = code_buffer.genLabel();
+        int end_location = code_buffer.emit("br label @");
+        string end_label = code_buffer.genLabel();
+
+
+        code_buffer.emit("%" + this->reg + " = phi i1 [%" + exp2->reg + ", %" + label->label_name + "],[0, %" + false_label + "]");
+        code_buffer.bpatch(CodeBuffer::makelist({label->label_location, FIRST}), label->label_name);
+        code_buffer.bpatch(CodeBuffer::makelist({label->label_location, SECOND}), false_label);
+        code_buffer.bpatch(CodeBuffer::makelist({false_location, FIRST}), end_label);
+        code_buffer.bpatch(CodeBuffer::makelist({end_location, FIRST}), end_label);
     }
 
-    Exp::Exp(Exp *exp1, Or *_or, Exp *exp2) : Typeable(TN_BOOL) {
+    Exp::Exp(Exp *exp1, Or *_or, Exp *exp2, Label* label) : Typeable(TN_BOOL) {
         TypeAssert(exp1, TN_BOOL);
         TypeAssert(exp2, TN_BOOL);
+
+        this->reg = generate_register->nextRegister();
+        this->false_list = vector<pair<int, BranchLabelIndex>>();
+        this->true_list = vector<pair<int, BranchLabelIndex>>();
+
+        int true_location = code_buffer.emit("br label @");
+        string true_label = code_buffer.genLabel();
+        int end_location = code_buffer.emit("br label @");
+        string end_label = code_buffer.genLabel();
+
+
+        code_buffer.emit("%" + this->reg + " = phi i1 [%" + exp2->reg + ", %" + label->label_name + "],[1, %" + true_label + "]");
+        code_buffer.bpatch(CodeBuffer::makelist({label->label_location, FIRST}), true_label);
+        code_buffer.bpatch(CodeBuffer::makelist({label->label_location, SECOND}), label->label_name);
+        code_buffer.bpatch(CodeBuffer::makelist({true_location, FIRST}), end_label);
+        code_buffer.bpatch(CodeBuffer::makelist({end_location, FIRST}), end_label);
     }
 
     Exp::Exp(Exp *exp1, Relop *relop, Exp *exp2) : Typeable(TN_BOOL) {
-
         if (!isNumeric(exp1->type) || !isNumeric(exp2->type)) {
             //std::cout << "error in relop" << "\n";
             output::errorMismatch(yylineno);
@@ -529,8 +615,8 @@ inline namespace grammar {
         this->reg = generate_register->nextRegister();
         std::string reg_left = exp1->reg;
         std::string reg_right = exp2->reg;
-        PRINT_PARAM(exp1->reg);
-        PRINT_PARAM(exp2->reg);
+        //PRINT_PARAM(exp1->reg);
+        //PRINT_PARAM(exp2->reg);
         const bool is_any_int = exp1->type == TN_INT || exp2->type == TN_INT;
         const std::string exp_size = is_any_int ? "i32" : "i8";
         const std::string op = [&]() {
@@ -573,5 +659,11 @@ inline namespace grammar {
 
     Exp::Exp(const string& x, Exp *exp) : Typeable(TN_BOOL) {
         TypeAssert(exp, TN_BOOL);
+    }
+
+    void end_function(RetType* ret) {
+        current_function = "";
+        closeScope();
+        closeFunction(ret);
     }
 }

@@ -12,6 +12,7 @@
 #include <vector>
 #include <memory>
 #include <string>
+#include "bp.hpp"
 extern int yylineno;
 
 inline namespace grammar{
@@ -20,7 +21,7 @@ inline namespace grammar{
     void endProgram();
     void closeScope();
     void startScope();
-    void end_function();
+
     void start_while();
     void end_while();
 
@@ -36,6 +37,8 @@ inline namespace grammar{
     struct Call;
     struct ExpList;
     struct Exp;
+
+    void end_function(RetType* ret);
 
     struct Program : public Node {
         Program();
@@ -107,9 +110,18 @@ inline namespace grammar{
         ExpList(Exp*, ExpList*);
     };
 
+    struct Label : public Node {
+        int label_location;
+        std::string label_name;
+
+        Label(Exp* exp);
+    };
+
     struct Exp : public Node, public Typeable {
         std::string value;
         std::string reg;
+        std::vector<pair<int,BranchLabelIndex>> true_list;
+        std::vector<pair<int,BranchLabelIndex>> false_list;
 
         explicit Exp(Id*);
         explicit Exp(Call*);
@@ -122,8 +134,8 @@ inline namespace grammar{
         Exp(Exp* , If*, Exp*, Else*, Exp*);
         Exp(Exp*, Binop*, Exp*);
         Exp(Not*, Exp*);
-        Exp(Exp*, And*, Exp*);
-        Exp(Exp*, Or*, Exp*);
+        Exp(Exp*, And*, Exp*, Label*);
+        Exp(Exp*, Or*, Exp*, Label*);
         Exp(Exp*, Relop*, Exp*);
         Exp(Type*, Exp*);
     };
