@@ -11,7 +11,7 @@
     extern int yyerror(const char*);
     extern int yylineno;
     using namespace output;
-    Label* label;
+    extern int currinstr;
 %}
 //Terminals: %token, %left, %right, %nonassoc
 %nonassoc PRECX;
@@ -67,7 +67,7 @@ FormalsList_ : FormalDecl_  { $$ = new FormalsList( static_cast<FormalDecl *>($1
             | FormalDecl_  COMMA FormalsList_ { $$ = new FormalsList( static_cast<FormalDecl *>($1),static_cast<FormalsList *>($3)); };
 FormalDecl_   : Type_ ID  { $$ = new FormalDecl( static_cast<Type *>($1),static_cast<Id *>($2)); };
 Statements_  : Statement_ { $$ = new Statements( static_cast<Statement *>($1)); }
-            | Statements_ Statement_ { $$ = new Statements( static_cast<Statements *>($1),static_cast<Statement *>($2)); };
+            | Statements_ Label Statement_ { $$ = new Statements( static_cast<Statements *>($1),static_cast<Statement *>($3),static_cast<Label*>($2)); };
 Statement_   : LBRACE M Statements_ MC RBRACE { $$ = new Statement( static_cast<Statements *>($2)); }
             | Type_ ID SC  { $$ = new Statement( static_cast<Type *>($1),static_cast<Id *>($2)); }
 		    |Type_ ID ASSIGN Exp_ SC { $$ = new Statement( static_cast<Type *>($1),static_cast<Id *>($2),static_cast<Exp *>($4)); }
@@ -75,8 +75,8 @@ Statement_   : LBRACE M Statements_ MC RBRACE { $$ = new Statement( static_cast<
 		    |Call_ SC  { $$ = new Statement( static_cast<Call *>($1)); }
             | RETURN SC  { $$ = new Statement( static_cast<Return *>($1)); }
 		    |RETURN Exp_ SC  {  $$ = new Statement( static_cast<Return *>($1),static_cast<Exp *>($2)); }
-            | IF LPAREN REDUCE_EXP RPAREN M Statement_ {$$ = new Statement(static_cast<If*>($1),static_cast<Exp*>($3)); closeScope();}
-		    |IF LPAREN REDUCE_EXP RPAREN M Statement_ ELSE { $$ = new Statement( static_cast<If *>($1),static_cast<Exp *>($3),static_cast<Else *>($7)); closeScope();} M Statement_  MC
+            | IF LPAREN REDUCE_EXP RPAREN M Statement_ {$$ = new Statement(static_cast<If*>($1),static_cast<Exp*>($3),static_cast<Label*>($5),static_cast<Statement*>($6)); closeScope();}
+		    |IF LPAREN REDUCE_EXP RPAREN M Statement_ N ELSE M Statement_ { $$ = new Statement( static_cast<If *>($1),static_cast<Exp *>($3),static_cast<Label*>($5),static_cast<Statement*>($6),static_cast<N*>($7),static_cast<Else *>($8),static_cast<Label*>($9),static_cast<Statement*>($10)); closeScope();} MC
             | WHILE LPAREN REDUCE_EXP RPAREN  {startScope(); start_while();} Statement_ { $$ = new Statement( static_cast<While *>($1),static_cast<Exp *>($3)); end_while(); closeScope();}
 		    |BREAK SC { $$ = new Statement( static_cast<Break *>($1)); }
             | CONTINUE SC { $$ = new Statement( static_cast<Continue *>($1)); };
@@ -103,11 +103,14 @@ Exp_         : LPAREN Exp_ RPAREN { $$ = new Exp( static_cast<Exp *>($2)); }
             | NOT Exp_ { $$ = new Exp( static_cast<Not *>($1),static_cast<Exp *>($2)); }
             | Exp_ RELOP Exp_ {$$ = new Exp( static_cast<Exp *>($1),static_cast<Relop *>($2),static_cast<Exp *>($3)); }
             | Exp_ RELOP2 Exp_ { $$ = new Exp( static_cast<Exp *>($1),static_cast<Relop *>($2),static_cast<Exp *>($3)); }
-            | Exp_ AND {label = new Label(static_cast<Exp *>($1));} Exp_ { $$ = new Exp( static_cast<Exp *>($1),static_cast<And *>($2),static_cast<Exp *>($4),label); }
-            | Exp_ OR {label = new Label(static_cast<Exp *>($1));} Exp_ { $$ = new Exp( static_cast<Exp *>($1),static_cast<Or *>($2),static_cast<Exp *>($4),label); }
+            | Exp_ AND M_ANDOR Exp_ { $$ = new Exp( static_cast<Exp *>($1),static_cast<And *>($2),static_cast<Exp *>($4),static_cast<Label *>($3)); }
+            | Exp_ OR M_ANDOR Exp_ { $$ = new Exp( static_cast<Exp *>($1),static_cast<Or *>($2),static_cast<Exp *>($4),static_cast<Label *>($3)); }
             | LPAREN Type_ RPAREN Exp_ { $$ = new Exp( static_cast<Type *>($2),static_cast<Exp *>($4)); };
 
-M :         {startScope();}
+Label: { $$ = new Label(); }
+M_ANDOR : {$$ = new Label();}
+N: { $$ = new N(); }
+M :         {startScope(); $$ = new Label();}
 MC :        {closeScope();}
 REDUCE_EXP:  Exp_ {$$ = new Exp( "If",static_cast<Exp *>($1));}
 %%

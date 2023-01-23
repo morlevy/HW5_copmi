@@ -48,6 +48,11 @@ inline namespace grammar{
         Funcs();
     };
 
+    struct N : public Node {
+        vector<pair<int,BranchLabelIndex>> next_list;
+        N();
+    };
+
     struct FuncDecl : public Node {
         std::vector<Typename> types;
         std::string name;
@@ -57,6 +62,13 @@ inline namespace grammar{
     struct RetType : public Node {
         Typename type;
         explicit RetType(Typename type);
+    };
+
+    struct Label : public Node {
+        //int label_location;
+        std::string label_name;
+
+        Label();
     };
     
     struct Formals : public Node {
@@ -78,11 +90,13 @@ inline namespace grammar{
     };
 
     struct Statements : public Node {
+        vector<pair<int, BranchLabelIndex>> next_list;
         explicit Statements(Statement*) ;
-        Statements(Statements*, Statement*) ;
+        Statements(Statements*, Statement*,Label*) ;
     };
 
     struct Statement : public Node {
+        vector<pair<int, BranchLabelIndex>> next_list;
         std::string value;
         Statement(Statements*);
         Statement(Type*, Id*);
@@ -91,8 +105,8 @@ inline namespace grammar{
         Statement(Call*);
         Statement(Return*);
         Statement(Return*, Exp*);
-        Statement(If*, Exp*);
-        Statement(If*,Exp*, Else*);
+        Statement(If*, Exp*,Label*,Statement*);
+        Statement(If*,Exp*,Label*,Statement*,N*, Else*,Label*,Statement*);
         Statement(While*,Exp*);
         Statement(Break*);
         Statement(Continue*);
@@ -110,12 +124,7 @@ inline namespace grammar{
         ExpList(Exp*, ExpList*);
     };
 
-    struct Label : public Node {
-        int label_location;
-        std::string label_name;
 
-        Label(Exp* exp);
-    };
 
     struct Exp : public Node, public Typeable {
         std::string value;

@@ -4,6 +4,7 @@
 
 #include "Token.h"
 #include <iostream>
+#include <cstring>
 
 inline namespace lexical {
 
@@ -11,25 +12,24 @@ inline namespace lexical {
     }
 
     Relop::Relop(char *value) {
-        /*
-        if(std::strcmp(value,"<=") == 0){
+        if(strcmp(value,"<=") == 0){
             this->value = LTE;
         }
-        if(std::strcmp(value,"<") == 0){
+        if(strcmp(value,"<") == 0){
             this->value = LT;
         }
-        if(std::strcmp(value,">=") == 0){
+        if(strcmp(value,">=") == 0){
             this->value = GTE;
         }
-        if(std::strcmp(value,">") == 0){
+        if(strcmp(value,">") == 0){
             this->value = GT;
         }
-        if(std::strcmp(value,"==") == 0){
+        if(strcmp(value,"==") == 0){
             this->value = EQ;
         }
-        if(std::strcmp(value,"!=") == 0){
+        if(strcmp(value,"!=") == 0){
             this->value = DIF;
-        }*/
+        }
     }
 
     Binop::Binop(char value) {
