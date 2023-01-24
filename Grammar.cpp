@@ -10,8 +10,8 @@
 #include "GenerateRegister.hpp"
 
 using namespace std;
-SymbolTable* symbol_table;
-CodeBuffer& code_buffer = CodeBuffer::instance();
+SymbolTable *symbol_table;
+CodeBuffer &code_buffer = CodeBuffer::instance();
 GenerateRegister *generate_register = new GenerateRegister();
 int curr_scope = 0;
 string current_function;
@@ -69,7 +69,6 @@ inline namespace grammar {
         label_name = code_buffer.genLabel();
         FUNC_OUT
     }
-
 
 
     void startScope() {
@@ -176,7 +175,7 @@ inline namespace grammar {
 
     Funcs::Funcs() {}
 
-    bool idInSymbolTable(const string& id) {
+    bool idInSymbolTable(const string &id) {
         FUNC_IN
         bool flag = false;
         for (int i = symbol_table->scopes.size() - 1; i >= 0; i--) {
@@ -223,20 +222,24 @@ inline namespace grammar {
             formals_llvm_list = "()";
             types.emplace_back(TN_VOID);
         }
-        formals_llvm_list = "("+formals_llvm_list.substr(0, formals_llvm_list.size() - 2)+")";
+        formals_llvm_list = "(" + formals_llvm_list.substr(0, formals_llvm_list.size() - 2) + ")";
         currinstr = code_buffer.emit("define " + return_llvm_type + " @" + id->name + formals_llvm_list + " {");
         currinstr = code_buffer.emit("%stack = alloca [50 x i32]");
         currinstr = code_buffer.emit("%args = alloca [ " + to_string(num_args) + " x i32]");
         for (int i = 0; i < formulas->formals.size(); i++) {
             std::string reg = generate_register->nextRegister();
-            currinstr = code_buffer.emit("%" + reg + " = getelementptr [ " + to_string(num_args) + " x i32], [ " + to_string(num_args) +
-                                         " x i32]* %args, i32 0, i32 " + to_string(num_args - i - 1));
-            if(convert_type_llvm(formulas->formals[i]->type) != "i32"){
+            currinstr = code_buffer.emit(
+                    "%" + reg + " = getelementptr [ " + to_string(num_args) + " x i32], [ " + to_string(num_args) +
+                    " x i32]* %args, i32 0, i32 " + to_string(num_args - i - 1));
+            if (convert_type_llvm(formulas->formals[i]->type) != "i32") {
                 string new_reg = generate_register->nextRegister();
-                currinstr = code_buffer.emit("%" + new_reg + " =zext " + convert_type_llvm(formulas->formals[i]->type) + " %" + to_string(i) + " to i32");
+                currinstr = code_buffer.emit(
+                        "%" + new_reg + " = zext " + convert_type_llvm(formulas->formals[i]->type) + " %" +
+                        to_string(i) + " to i32");
                 currinstr = code_buffer.emit("store i32 %" + new_reg + ", i32* %" + reg);
             } else {
-                currinstr = code_buffer.emit("store i32 %" + formulas->formals[i]->name + ", i32* %" + reg);
+                int index_param = 0;
+                currinstr = code_buffer.emit("store i32 %" + to_string(i)/*formulas->formals[i]->name*/ + ", i32* %" + reg);
             }
         }
         types.emplace_back(ret_type->type);
@@ -254,12 +257,12 @@ inline namespace grammar {
         FUNC_OUT
     }
 
-    N::N(bool branch,Exp* exp) {
+    N::N(bool branch, Exp *exp) {
         FUNC_IN
-        if(branch){
-            currinstr = code_buffer.emit("br i1 " + exp->reg + ", label @ , label @");
-            exp->true_list = CodeBuffer::merge(exp->true_list,CodeBuffer::makelist({currinstr, FIRST}));
-            exp->false_list = CodeBuffer::merge(exp->false_list,CodeBuffer::makelist({currinstr, SECOND}));
+        if (branch) {
+            currinstr = code_buffer.emit("br i1 %" + exp->reg + ", label @ , label @");
+            exp->true_list = CodeBuffer::merge(exp->true_list, CodeBuffer::makelist({currinstr, FIRST}));
+            exp->false_list = CodeBuffer::merge(exp->false_list, CodeBuffer::makelist({currinstr, SECOND}));
             exp->label = code_buffer.genLabel();
             this->label = exp->label;
         } else {
@@ -270,7 +273,6 @@ inline namespace grammar {
         }
         FUNC_OUT
     }
-
 
 
     void closeFunction(RetType *retType) {
@@ -372,7 +374,7 @@ inline namespace grammar {
         }
         currinstr = code_buffer.emit("store i32 %" + expReg + ", i32* %" + ptr);
         exp->reg = expReg;
-        symbol_table->scopes.back().symbols.emplace_back(
+        symbol_table->scopes.back().symbols.push_back(
                 new SymbolTable::SymbolData(offset, id->name, type->type, expReg, exp->value));
         FUNC_OUT
     }
@@ -402,7 +404,7 @@ inline namespace grammar {
         FUNC_OUT
     }
 
-    Statement::Statement(Call *call): next_list({}) {
+    Statement::Statement(Call *call) : next_list({}) {
 
     }
 
@@ -434,7 +436,7 @@ inline namespace grammar {
         FUNC_OUT
     }
 
-    Statement::Statement(If *if_, Exp *exp, Statement* statement) {
+    Statement::Statement(If *if_, Exp *exp, Statement *statement) {
         FUNC_IN
         TypeAssert(exp, TN_BOOL);
         ////<< "if" << endl;
@@ -444,11 +446,12 @@ inline namespace grammar {
         ////<< "arrived here 2\n";
 
         currinstr = code_buffer.emit("br label @");
-        code_buffer.bpatch(CodeBuffer::merge(exp->false_list, CodeBuffer::makelist({currinstr, FIRST})), code_buffer.genLabel());
+        code_buffer.bpatch(CodeBuffer::merge(exp->false_list, CodeBuffer::makelist({currinstr, FIRST})),
+                           code_buffer.genLabel());
         FUNC_OUT
     }
 
-    Statement::Statement(If *_if, Exp *exp,Statement* statement1,N* n, Else *_else, Statement* statement2) {
+    Statement::Statement(If *_if, Exp *exp, Statement *statement1, N *n, Else *_else, Statement *statement2) {
         FUNC_IN
         TypeAssert(exp, TN_BOOL);
         //code_buffer.bpatch(exp->true_list, label1->label_name);
@@ -535,22 +538,22 @@ inline namespace grammar {
         }
 
         std::string line = "call " + convert_type_llvm(type) + " @" + id->name + "(";
-        for(auto i = 0; i < func_types.size(); i++){
-            Exp& exp = *expList->exp_list[i];
+        for (auto i = 0; i < func_types.size(); i++) {
+            Exp &exp = *expList->exp_list[i];
             auto arg_type = func_types[i];
-            if (arg_type == TN_INT && exp.type == TN_BYTE){
+            if (arg_type == TN_INT && exp.type == TN_BYTE) {
                 auto old_reg = exp.reg;
                 exp.reg = generate_register->nextRegister();
-                CodeBuffer::instance().emit("%" + exp.reg + " = zext i8" + old_reg + "to i32" );
+                CodeBuffer::instance().emit("%" + exp.reg + " = zext i8" + old_reg + "to i32");
                 exp.type = TN_INT;
             }
             line += convert_type_llvm(exp.type) + "%" + exp.reg;
-            if(i+1 < func_types.size()){
+            if (i + 1 < func_types.size()) {
                 line += ", ";
             }
         }
         line += ")";
-        CodeBuffer::instance().emit(line);
+        calling_line = line;
         FUNC_OUT
     }
 
@@ -574,7 +577,7 @@ inline namespace grammar {
             output::errorPrototypeMismatch(yylineno, id->name, vec);
             exit(0);
         }
-        CodeBuffer::instance().emit("call " + convert_type_llvm(type) + " @" + id->name + "()");
+        calling_line = "call " + convert_type_llvm(type) + " @" + id->name + "()";
         FUNC_OUT
     }
 
@@ -610,7 +613,13 @@ inline namespace grammar {
     }
 
     Exp::Exp(Call *call) : Typeable(call->type) {
-
+        if(call->type != TN_VOID){
+            reg = generate_register->nextRegister();
+            CodeBuffer::instance().emit("%" + reg + " = " + call->calling_line);
+        }
+        else{
+            CodeBuffer::instance().emit(call->calling_line);
+        }
     }
 
     Exp::Exp(Num *num) : Typeable(TN_INT), value(to_string(num->value)) {
@@ -639,7 +648,8 @@ inline namespace grammar {
         this->reg = generate_register->nextRegister();
         code_buffer.emitGlobal("@" + reg + "= constant [" + to_string(value.size() - 2) + " x i8] c" + value);
         currinstr = code_buffer.emit(
-                "%" + reg + "= getelementptr [" + to_string(value.size() - 2 ) + " x i8], [" + to_string(value.size() - 2) +
+                "%" + reg + "= getelementptr [" + to_string(value.size() - 2) + " x i8], [" +
+                to_string(value.size() - 2) +
                 " x i8]* @" + reg + ", i8 0, i8 0");
         FUNC_OUT
     }
@@ -677,16 +687,15 @@ inline namespace grammar {
         FUNC_OUT
     }
 
-    Exp::Exp(Exp *exp1, And *_and, Exp *exp2 ) : Typeable(TN_BOOL) {
+    Exp::Exp(Exp *exp1, And *_and, Exp *exp2) : Typeable(TN_BOOL) {
         FUNC_IN
         TypeAssert(exp1, TN_BOOL);
         TypeAssert(exp2, TN_BOOL);
 
-        code_buffer.bpatch(exp1->true_list,exp1->label);
+        code_buffer.bpatch(exp1->true_list, exp1->label);
 
-        if(exp2->value == "true" || exp2->value == "false" || exp2->value == "1" || exp2->value == "0") {
-            code_buffer.emit("true or false check!!!");
-            int loc = code_buffer.emit("br i1 " + exp2->reg + ", label @ , label @");
+        if (exp2->value == "true" || exp2->value == "false" || exp2->value == "1" || exp2->value == "0") {
+            int loc = code_buffer.emit("br i1 %" + exp2->reg + ", label @ , label @");
             exp2->true_list = code_buffer.merge(exp2->true_list, code_buffer.makelist({loc, FIRST}));
             exp2->false_list = code_buffer.merge(exp2->false_list, code_buffer.makelist({loc, SECOND}));
             exp2->label = code_buffer.genLabel();
@@ -696,7 +705,7 @@ inline namespace grammar {
         //this->reg = generate_register->nextRegister();
         this->reg = exp2->reg;
         this->true_list = exp2->true_list;
-        this->false_list = CodeBuffer::merge(exp1->false_list,exp2->false_list);
+        this->false_list = CodeBuffer::merge(exp1->false_list, exp2->false_list);
         this->label = exp2->label;
         FUNC_OUT
 
@@ -719,15 +728,15 @@ inline namespace grammar {
         TypeAssert(exp1, TN_BOOL);
         TypeAssert(exp2, TN_BOOL);
 
-        code_buffer.bpatch(exp1->false_list,exp1->label);
-        if(exp2->value == "true" || exp2->value == "false" || exp2->value == "1" || exp2->value == "0") {
-            int loc = code_buffer.emit("br i1 " + exp2->reg + ", label @ , label @");
+        code_buffer.bpatch(exp1->false_list, exp1->label);
+        if (exp2->value == "true" || exp2->value == "false" || exp2->value == "1" || exp2->value == "0") {
+            int loc = code_buffer.emit("br i1 %" + exp2->reg + ", label @ , label @");
             exp2->true_list = code_buffer.merge(exp2->true_list, code_buffer.makelist({loc, FIRST}));
             exp2->false_list = code_buffer.merge(exp2->false_list, code_buffer.makelist({loc, SECOND}));
             exp2->label = code_buffer.genLabel();
         }
         this->false_list = exp2->false_list;
-        this->true_list = CodeBuffer::merge(exp1->true_list,exp2->true_list);
+        this->true_list = CodeBuffer::merge(exp1->true_list, exp2->true_list);
         this->label = exp2->label;
         this->reg = exp2->reg;
         FUNC_OUT
@@ -749,8 +758,8 @@ inline namespace grammar {
         code_buffer.bpatch(CodeBuffer::makelist({end_location, FIRST}), end_label);**/
     }
 
-    string convert_to_llvm_relop(Relop::RelopValue val){
-        switch(val){
+    string convert_to_llvm_relop(Relop::RelopValue val) {
+        switch (val) {
             case Relop::RelopValue::EQ:
                 return "eq";
             case Relop::RelopValue::GTE:
@@ -777,10 +786,12 @@ inline namespace grammar {
         }
         this->reg = generate_register->nextRegister();
         //code_buffer.emit("relop value: " + to_string((relop->value)));
-        currinstr = code_buffer.emit("%" + this->reg + " = icmp " + convert_to_llvm_relop(relop->value) + " i32 %" + exp1->reg + ", %" + exp2->reg);
+        currinstr = code_buffer.emit(
+                "%" + this->reg + " = icmp " + convert_to_llvm_relop(relop->value) + " i32 %" + exp1->reg + ", %" +
+                exp2->reg);
         currinstr = code_buffer.emit("br i1 %" + this->reg + ", label @, label @");
-        this->true_list = CodeBuffer::makelist({currinstr,FIRST});
-        this->false_list = CodeBuffer::makelist({currinstr,SECOND});
+        this->true_list = CodeBuffer::makelist({currinstr, FIRST});
+        this->false_list = CodeBuffer::makelist({currinstr, SECOND});
         //code_buffer.bpatch(this->true_list, );
         this->label = code_buffer.genLabel();
     }
@@ -797,7 +808,8 @@ inline namespace grammar {
         FUNC_OUT
     }
 
-    Exp::Exp(Exp *exp) : Typeable(exp->type), reg(exp->reg), false_list(exp->false_list), true_list(exp->true_list) ,label(exp->label){
+    Exp::Exp(Exp *exp) : Typeable(exp->type), reg(exp->reg), false_list(exp->false_list), true_list(exp->true_list),
+                         label(exp->label) {
         FUNC_IN
         //code_buffer.emit("(exp)="+convert_type(exp->type));
         FUNC_OUT
@@ -870,14 +882,17 @@ inline namespace grammar {
             code_buffer.bpatch(std::vector{make_pair(need_back_patch, FIRST)}, yes_div_zero);
             code_buffer.bpatch(std::vector{make_pair(need_back_patch, SECOND)}, no_div_zero);
         }
-        currinstr = code_buffer.emit("%" + this->reg + " = " + op + " " + exp_size + " %" + reg_left + ", %" + reg_right);
+        currinstr = code_buffer.emit(
+                "%" + this->reg + " = " + op + " " + exp_size + " %" + reg_left + ", %" + reg_right);
         FUNC_OUT
     }
 
-    Exp::Exp(const string& x, Exp *exp) : Typeable(TN_BOOL), reg(exp->reg), false_list(exp->false_list), true_list(exp->true_list) {
+    Exp::Exp(const string &x, Exp *exp) : Typeable(TN_BOOL), reg(exp->reg), false_list(exp->false_list),
+                                          true_list(exp->true_list) {
         FUNC_IN
         TypeAssert(exp, TN_BOOL);
-        if(exp->value =="true" || exp->value == "false" || exp->value == "0" || exp->value == "1" || exp->value == "" || exp->value == "null") {
+        if (exp->value == "true" || exp->value == "false" || exp->value == "0" || exp->value == "1" ||
+            exp->value == "" || exp->value == "null") {
             currinstr = code_buffer.emit("br i1 %" + exp->reg + ", label @ , label @");
             exp->true_list = code_buffer.merge(exp->true_list, code_buffer.makelist({currinstr, FIRST}));
             exp->false_list = code_buffer.merge(exp->false_list, code_buffer.makelist({currinstr, SECOND}));
@@ -891,7 +906,7 @@ inline namespace grammar {
         FUNC_OUT
     }
 
-    void end_function(RetType* ret) {
+    void end_function(RetType *ret) {
         FUNC_IN
         current_function = "";
         closeScope();

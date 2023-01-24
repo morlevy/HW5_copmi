@@ -88,8 +88,8 @@ const SymbolTable::FunctionSymbolData* SymbolTable::getFunctionSymbol(const stri
 }
 
 
-SymbolTable::SymbolData::SymbolData(int offset, std::string name, std::vector<Typename> types, std::string reg) : offset(offset),
-                                                                                     name(std::move(name)), types(std::move(types)) , reg(reg){
+SymbolTable::SymbolData::SymbolData(int offset, std::string name, std::vector<Typename> types, std::string reg, std::string value) :
+offset(offset), name(std::move(name)), types(std::move(types)) , reg(reg), value(value){
 
 }
 
@@ -105,11 +105,17 @@ vector<Typename> SymbolTable::SymbolData::getTypes() const {
     return types;
 }
 
-SymbolTable::SymbolData::SymbolData(int offset, std::string name, Typename type, std::string reg): offset(offset),name(name),types(std::vector<Typename>{type}),reg(reg) {
+SymbolTable::SymbolData::SymbolData(int offset, std::string name, Typename type, std::string reg, std::string value): offset(offset),name(name),types(std::vector<Typename>{type}),reg(reg), value(value) {
 
 }
 
+void SymbolTable::SymbolData::setValue(const string &value) {
+    SymbolData::value = value;
+}
 
+const string &SymbolTable::SymbolData::getValue() const {
+    return value;
+}
 
 
 SymbolTable::SymbolData* SymbolTable::Scope::search(const string &name) const noexcept {
@@ -148,5 +154,4 @@ Typename SymbolTable::FunctionSymbolData::getType() const {
 const std::vector<Typename> &SymbolTable::FunctionSymbolData::getTypes() const {
     return types;
 }
-
 

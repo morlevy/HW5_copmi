@@ -6,7 +6,7 @@
 #define HW3_MACROS_H
 
 
-#define HW3_DEBUG 1
+#define HW3_DEBUG 0
 
 //Macro's flags
 #define LEXEME_IN_TOKEN  ((HW3_DEBUG) && 1)
