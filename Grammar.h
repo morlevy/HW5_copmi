@@ -50,8 +50,9 @@ inline namespace grammar{
 
     struct N : public Node {
         vector<pair<int,BranchLabelIndex>> next_list;
+
         std::string label;
-        N();
+        N(bool branch = false,Exp* exp = nullptr);
     };
 
     struct FuncDecl : public Node {
@@ -92,12 +93,16 @@ inline namespace grammar{
 
     struct Statements : public Node {
         vector<pair<int, BranchLabelIndex>> next_list;
+        vector<pair<int, BranchLabelIndex>> true_list;
+        vector<pair<int, BranchLabelIndex>> false_list;
         explicit Statements(Statement*) ;
-        Statements(Statements*, Statement*,Label*) ;
+        Statements(Statements*, Statement*) ;
     };
 
     struct Statement : public Node {
         vector<pair<int, BranchLabelIndex>> next_list;
+        vector<pair<int, BranchLabelIndex>> true_list;
+        vector<pair<int, BranchLabelIndex>> false_list;
         std::string value;
         Statement(Statements*);
         Statement(Type*, Id*);
@@ -145,8 +150,8 @@ inline namespace grammar{
         Exp(Exp* , If*, Exp*, Else*, Exp*);
         Exp(Exp*, Binop*, Exp*);
         Exp(Not*, Exp*);
-        Exp(Exp*, And*, Exp*, Label*);
-        Exp(Exp*, Or*, Exp*, Label*);
+        Exp(Exp*, And*, Exp*);
+        Exp(Exp*, Or*, Exp*);
         Exp(Exp*, Relop*, Exp*);
         Exp(Type*, Exp*);
     };

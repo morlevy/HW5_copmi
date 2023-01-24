@@ -254,14 +254,23 @@ inline namespace grammar {
         FUNC_OUT
     }
 
-    N::N() {
+    N::N(bool branch,Exp* exp) {
         FUNC_IN
-        currinstr = code_buffer.emit("br label @");
-        this->label = code_buffer.genLabel();
+        if(branch){
+            currinstr = code_buffer.emit("br i1 " + exp->reg + ", label @ , label @");
+            exp->true_list = CodeBuffer::merge(exp->true_list,CodeBuffer::makelist({currinstr, FIRST}));
+            exp->false_list = CodeBuffer::merge(exp->false_list,CodeBuffer::makelist({currinstr, SECOND}));
+            exp->label = code_buffer.genLabel();
+        } else {
+            currinstr = code_buffer.emit("br label @");
+            this->label = code_buffer.genLabel();
 
-        this->next_list = CodeBuffer::makelist({currinstr,FIRST});
+            this->next_list = CodeBuffer::makelist({currinstr, FIRST});
+        }
         FUNC_OUT
     }
+
+
 
     void closeFunction(RetType *retType) {
         FUNC_IN
@@ -305,14 +314,18 @@ inline namespace grammar {
         FUNC_IN
         ////<< "statement next list size: " << statement->next_list.size() << endl;
         this->next_list = statement->next_list;
+        this->next_list = statement->next_list;
+        this->false_list = statement->false_list;
         ////<< "statement2" << endl;
         FUNC_OUT
     }
 
-    Statements::Statements(Statements *statements, Statement *statement, Label* label) {
+    Statements::Statements(Statements *statements, Statement *statement) {
         FUNC_IN
-        code_buffer.bpatch(statements->next_list, label->label_name);
-        this->next_list = statement->next_list;
+        //code_buffer.bpatch(statements->next_list, label->label_name);
+        this->next_list = CodeBuffer::merge(statements->next_list, statement->next_list);
+        this->false_list = CodeBuffer::merge(statements->false_list, statement->false_list);
+        this->true_list = CodeBuffer::merge(statements->true_list, statement->true_list);
         FUNC_OUT
     }
 
@@ -643,21 +656,24 @@ inline namespace grammar {
         FUNC_OUT
     }
 
-    Exp::Exp(Exp *exp1, And *_and, Exp *exp2, Label* label) : Typeable(TN_BOOL) {
+    Exp::Exp(Exp *exp1, And *_and, Exp *exp2 ) : Typeable(TN_BOOL) {
         FUNC_IN
         TypeAssert(exp1, TN_BOOL);
         TypeAssert(exp2, TN_BOOL);
 
-        code_buffer.bpatch(exp1->true_list,label->label_name);
+        code_buffer.bpatch(exp1->true_list,exp1->label);
 
-        int loc = code_buffer.emit("br i1 " + exp2->reg + ", label @ , label @");
-        exp2->true_list = code_buffer.merge(exp2->true_list, code_buffer.makelist({loc, FIRST}));
-        exp2->false_list = code_buffer.merge(exp2->false_list, code_buffer.makelist({loc, SECOND}));
-        exp2->label = code_buffer.genLabel();
+        if(exp2->value == "true" || exp2->value == "false" || exp2->value == "1" || exp2->value == "0") {
+            code_buffer.emit("true or false check!!!");
+            int loc = code_buffer.emit("br i1 " + exp2->reg + ", label @ , label @");
+            exp2->true_list = code_buffer.merge(exp2->true_list, code_buffer.makelist({loc, FIRST}));
+            exp2->false_list = code_buffer.merge(exp2->false_list, code_buffer.makelist({loc, SECOND}));
+            exp2->label = code_buffer.genLabel();
+        }
 
         //int label_location = code_buffer.emit("br i1 %" + exp1->reg + ", label @, label @");
         //this->reg = generate_register->nextRegister();
-
+        this->reg = exp2->reg;
         this->true_list = exp2->true_list;
         this->false_list = CodeBuffer::merge(exp1->false_list,exp2->false_list);
         this->label = exp2->label;
@@ -677,14 +693,23 @@ inline namespace grammar {
         code_buffer.bpatch(CodeBuffer::makelist({end_location, FIRST}), end_label);**/
     }
 
-    Exp::Exp(Exp *exp1, Or *_or, Exp *exp2, Label* label) : Typeable(TN_BOOL) {
+    Exp::Exp(Exp *exp1, Or *_or, Exp *exp2) : Typeable(TN_BOOL) {
         FUNC_IN
         TypeAssert(exp1, TN_BOOL);
         TypeAssert(exp2, TN_BOOL);
 
-        code_buffer.bpatch(exp1->false_list,label->label_name);
+        code_buffer.bpatch(exp1->false_list,exp1->label);
+        if(exp2->value == "true" || exp2->value == "false" || exp2->value == "1" || exp2->value == "0") {
+            code_buffer.emit("true or false check!!!");
+            int loc = code_buffer.emit("br i1 " + exp2->reg + ", label @ , label @");
+            exp2->true_list = code_buffer.merge(exp2->true_list, code_buffer.makelist({loc, FIRST}));
+            exp2->false_list = code_buffer.merge(exp2->false_list, code_buffer.makelist({loc, SECOND}));
+            exp2->label = code_buffer.genLabel();
+        }
         this->false_list = exp2->false_list;
         this->true_list = CodeBuffer::merge(exp1->true_list,exp2->true_list);
+        this->label = exp2->label;
+        this->reg = exp2->reg;
         FUNC_OUT
         /**
         this->reg = generate_register->nextRegister();
@@ -837,7 +862,12 @@ inline namespace grammar {
             exp->true_list = code_buffer.merge(exp->true_list, code_buffer.makelist({loc, FIRST}));
             exp->false_list = code_buffer.merge(exp->false_list, code_buffer.makelist({loc, SECOND}));
         }
-        code_buffer.bpatch(exp->true_list, this->label);
+        code_buffer.bpatch(exp->true_list, exp->label);
+        this->false_list = exp->false_list;
+        this->true_list = exp->true_list;
+        this->label = exp->label;
+        this->reg = exp->reg;
+
         ////<< "not exp" << endl;
         FUNC_OUT
     }
