@@ -135,6 +135,7 @@ inline namespace grammar{
     struct Exp : public Node, public Typeable {
         std::string value;
         std::string reg;
+        vector<pair<int, BranchLabelIndex>> next_list;
         std::vector<pair<int,BranchLabelIndex>> true_list;
         std::vector<pair<int,BranchLabelIndex>> false_list;
         std::string label;
