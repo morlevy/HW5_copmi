@@ -858,7 +858,7 @@ inline namespace grammar {
     Exp::Exp(const string& x, Exp *exp) : Typeable(TN_BOOL), reg(exp->reg), false_list(exp->false_list), true_list(exp->true_list) {
         FUNC_IN
         TypeAssert(exp, TN_BOOL);
-        if(exp->value =="true" || exp->value == "false" || exp->value == "0" || exp->value == "1") {
+        if(exp->value =="true" || exp->value == "false" || exp->value == "0" || exp->value == "1" || exp->value == "" || exp->value == "null") {
             int loc = code_buffer.emit("br i1 " + exp->reg + ", label @ , label @");
             exp->true_list = code_buffer.merge(exp->true_list, code_buffer.makelist({loc, FIRST}));
             exp->false_list = code_buffer.merge(exp->false_list, code_buffer.makelist({loc, SECOND}));
