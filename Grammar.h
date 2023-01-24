@@ -71,7 +71,7 @@ inline namespace grammar{
 
         Label();
     };
-    
+
     struct Formals : public Node {
         std::vector<FormalDecl*> formals;
         Formals();
@@ -151,7 +151,7 @@ inline namespace grammar{
         Exp(Type*, Exp*);
     };
 
-    
+
 }
 
 #endif //HW3_GRAMMAR_H

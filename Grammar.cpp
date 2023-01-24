@@ -22,6 +22,7 @@ int num_args = 0;
 inline namespace grammar {
 
     Program::Program() {
+        FUNC_IN
         symbol_table = new SymbolTable();
         code_buffer.emitGlobal("declare i32 @printf(i8*, ...)");
         code_buffer.emitGlobal("declare void @exit(i32)");
@@ -42,6 +43,7 @@ inline namespace grammar {
                 "call i32 (i8*, ...) @printf(i8* getelementptr ([4 x i8], [4 x i8]* @.str_specifier, i32 0, i32 0), i8* %0)");
         code_buffer.emitGlobal("ret void");
         code_buffer.emitGlobal("}");
+        FUNC_OUT
         //
     }
 
@@ -63,14 +65,18 @@ inline namespace grammar {
     }
 
     Label::Label() {
+        FUNC_IN
         label_name = code_buffer.genLabel();
+        FUNC_OUT
     }
 
 
 
     void startScope() {
+        FUNC_IN
         symbol_table->scopes.emplace_back();
         symbol_table->offset_stack.push_back(symbol_table->offset_stack.back());
+        FUNC_OUT
     }
 
     std::string convert_type_llvm(Typename t) {
@@ -91,6 +97,7 @@ inline namespace grammar {
     }
 
     std::string loadRegister(int offset, Typename type) {
+        FUNC_IN
         std::string reg = generate_register->nextRegister();
         std::string ptr = generate_register->nextRegister();
         if (offset < 0) {
@@ -105,13 +112,16 @@ inline namespace grammar {
         if (type != TN_INT) {
             std::string reg2 = generate_register->nextRegister();
             currinstr = code_buffer.emit("%" + reg2 + " = trunc i32 %" + reg + " to " + convert_type_llvm(type));
+            FUNC_OUT
             return reg2;
         }
+        FUNC_OUT
         return reg;
     }
 
     void closeScope() {
         //output::endScope();
+        FUNC_IN
         SymbolTable::Scope curr_scope = symbol_table->scopes.back();
         for (auto symbol: curr_scope.symbols) {
             if (symbol->getTypes().size() == 1) { // symbol is var
@@ -135,19 +145,15 @@ inline namespace grammar {
                                                                                                  str_types));//function**/
             }
         }
-        /**
-        DO_DEBUG(
-                ////<< "______Global:______\n";
-                CodeBuffer::instance().printGlobalBuffer();
-                ////<< "______Code:______\n";
-                CodeBuffer::instance().printCodeBuffer();
-        );**/
+
         curr_scope.symbols.clear();
         symbol_table->scopes.pop_back();
         symbol_table->offset_stack.pop_back();
+        FUNC_OUT
     }
 
     void endProgram() {
+        FUNC_IN
         //find main function
         std::vector<SymbolTable::FunctionSymbolData> global_functions = symbol_table->global_functions;
         bool flag = false;
@@ -171,6 +177,7 @@ inline namespace grammar {
     Funcs::Funcs() {}
 
     bool idInSymbolTable(const string& id) {
+        FUNC_IN
         bool flag = false;
         for (int i = symbol_table->scopes.size() - 1; i >= 0; i--) {
             for (auto &symbol: symbol_table->scopes[i].symbols) {
@@ -178,10 +185,12 @@ inline namespace grammar {
                     flag = true;
             }
         }
+        FUNC_OUT
         return flag;
     }
 
     FuncDecl::FuncDecl(RetType *ret_type, Id *id, Formals *formulas) {
+        FUNC_IN
         if (idInSymbolTable(id->name)) {
             output::errorDef(yylineno, id->name);
             exit(0);
@@ -242,22 +251,26 @@ inline namespace grammar {
             symbol_table->scopes.back().symbols.push_back(
                     new SymbolTable::SymbolData(-i - 1, formulas->formals[i]->name, formulas->formals[i]->type, ""));
         }
+        FUNC_OUT
     }
 
     N::N() {
-        // generate label for else and bpatch it with Exp falselist later on
+        FUNC_IN
         currinstr = code_buffer.emit("br label @");
         this->label = code_buffer.genLabel();
 
         this->next_list = CodeBuffer::makelist({currinstr,FIRST});
+        FUNC_OUT
     }
 
     void closeFunction(RetType *retType) {
+        FUNC_IN
         string extra = retType->type == TN_VOID ? "" : " 0";
         currinstr = code_buffer.emit("ret " + convert_type_llvm(retType->type) + extra);
         currinstr = code_buffer.emit("}");
         current_function = "";
         num_args = 0;
+        FUNC_OUT
     }
 
     RetType::RetType(Typename type) : type(type) {
@@ -267,42 +280,55 @@ inline namespace grammar {
     Formals::Formals() {}
 
     Formals::Formals(FormalsList *formulas_list) {
+        FUNC_IN
         this->formals = vector<FormalDecl *>(formulas_list->list);
+        FUNC_OUT
     }
 
     FormalsList::FormalsList(FormalDecl *formal_decl) {
+        FUNC_IN
         list.push_back(formal_decl);
+        FUNC_OUT
     }
 
     FormalsList::FormalsList(FormalDecl *formal_decl, FormalsList *formulas_list) {
+        FUNC_IN
         list.push_back(formal_decl);
         list.insert(list.end(), formulas_list->list.begin(), formulas_list->list.end());
+        FUNC_OUT
     }
 
     FormalDecl::FormalDecl(Type *type, Id *id) : type(type->type), name(id->name) {
     }
 
     Statements::Statements(Statement *statement) {
+        FUNC_IN
         ////<< "statement next list size: " << statement->next_list.size() << endl;
         this->next_list = statement->next_list;
         ////<< "statement2" << endl;
+        FUNC_OUT
     }
 
     Statements::Statements(Statements *statements, Statement *statement, Label* label) {
+        FUNC_IN
         code_buffer.bpatch(statements->next_list, label->label_name);
         this->next_list = statement->next_list;
+        FUNC_OUT
     }
 
     Statement::Statement(Type *type, Id *id) {
+        FUNC_IN
         if (idInSymbolTable(id->name)) {
             output::errorDef(yylineno, id->name);
             exit(0);
         }
         symbol_table->scopes.back().symbols.emplace_back(
                 new SymbolTable::SymbolData(symbol_table->offset_stack.back()++, id->name, type->type, ""));
+        FUNC_OUT
     }
 
     Statement::Statement(Type *type, Id *id, Exp *exp) {
+        FUNC_IN
         if (!canImplicitlyAssign(*exp, *type)) {
             output::errorMismatch(yylineno);
             exit(0);
@@ -334,9 +360,11 @@ inline namespace grammar {
         exp->reg = expReg;
         symbol_table->scopes.back().symbols.emplace_back(
                 new SymbolTable::SymbolData(offset, id->name, type->type, expReg));
+        FUNC_OUT
     }
 
     Statement::Statement(Id *id, Assign *assign, Exp *exp) {
+        FUNC_IN
         SymbolTable::SymbolData *symbol_type = symbol_table->getSymbol(id->name);
         if (symbol_type == nullptr) {
             output::errorUndef(yylineno, id->name);
@@ -345,16 +373,18 @@ inline namespace grammar {
         //check if function
         if (symbol_type->getTypes().size() > 1) {
             output::errorUndef(yylineno, id->name);
+            FUNC_OUT
             exit(0);
         }
         if (!canImplicitlyAssign(exp->type, symbol_type->getTypes().back())) { //maybe get symbol problem
             output::errorMismatch(yylineno);
+            FUNC_OUT
             exit(0);
         }
         symbol_type->setRegister(exp->reg);
         //this->next_list = CodeBuffer::makelist({currinstr + 1, FIRST});
         //this->value = generate_register->nextRegister();
-
+        FUNC_OUT
     }
 
     Statement::Statement(Call *call): next_list({}) {
@@ -362,28 +392,35 @@ inline namespace grammar {
     }
 
     Statement::Statement(Return *_return) {
+        FUNC_IN
         SymbolTable::SymbolData *function = symbol_table->getSymbol(current_function);
         if (function == nullptr) {//shouldnt get inside
             EXIT_PRINT(0);
         }
         if (function->getTypes().back() != TN_VOID) {
             output::errorMismatch(yylineno);
+
             exit(0);
         }
+        FUNC_OUT
     }
 
     Statement::Statement(Return *_return, Exp *exp) {
+        FUNC_IN
         SymbolTable::SymbolData *function = symbol_table->getSymbol(current_function);
         if (function == nullptr) {
             EXIT_PRINT(0);
         }
         if (function->getTypes().back() != exp->type) {
             output::errorMismatch(yylineno);
+
             exit(0);
         }
+        FUNC_OUT
     }
 
     Statement::Statement(If *if_, Exp *exp, Statement* statement) {
+        FUNC_IN
         TypeAssert(exp, TN_BOOL);
         ////<< "if" << endl;
         //code_buffer.bpatch(exp->true_list, label->label_name);
@@ -393,9 +430,11 @@ inline namespace grammar {
 
         currinstr = code_buffer.emit("br label @");
         code_buffer.bpatch(CodeBuffer::merge(exp->false_list, CodeBuffer::makelist({currinstr, FIRST})), code_buffer.genLabel());
+        FUNC_OUT
     }
 
     Statement::Statement(If *_if, Exp *exp,Statement* statement1,N* n, Else *_else, Statement* statement2) {
+        FUNC_IN
         TypeAssert(exp, TN_BOOL);
         //code_buffer.bpatch(exp->true_list, label1->label_name);
         //code_buffer.bpatch(exp->false_list, label2->label_name);
@@ -411,10 +450,13 @@ inline namespace grammar {
         code_buffer.bpatch(code_buffer.merge(n->next_list, code_buffer.makelist({loc, FIRST})), label2);
         code_buffer.bpatch(exp->false_list, n->label);
         statement2->next_list = code_buffer.merge(statement1->next_list, statement2->next_list);
+        FUNC_OUT
     }
 
     Statement::Statement(While *_while, Exp *exp) {
+        FUNC_IN
         TypeAssert(exp, TN_BOOL);
+        FUNC_OUT
     }
 
     void start_while() {
@@ -426,27 +468,34 @@ inline namespace grammar {
     }
 
     Statement::Statement(Break *_break) {
+        FUNC_IN
         if (while_ <= 0) {
             output::errorUnexpectedBreak(yylineno);
             exit(0);
         }
+        FUNC_OUT
     }
 
     Statement::Statement(Continue *_continue) {
+        FUNC_IN
         if (while_ <= 0) {
             output::errorUnexpectedContinue(yylineno);
             exit(0);
         }
+        FUNC_OUT
     }
 
     Statement::Statement(Statements *s) {
-        ////<< "arrived here 4 size is: " << s->next_list.size() << endl;
+        FUNC_IN
+        // << "arrived here 4 size is: " << s->next_list.size() << endl;
         this->next_list = s->next_list;
-        ////<< "arrived here 5\n";
+        // << "arrived here 5\n";
+        FUNC_OUT
     }
 
     Call::Call(Id *id, ExpList *expList) : Typeable(TN_VOID) {
         auto func = symbol_table->getFunctionSymbol(id->name);
+        FUNC_IN
         if (func == nullptr) {
             output::errorUndefFunc(yylineno, id->name);
             exit(0);
@@ -469,9 +518,11 @@ inline namespace grammar {
                 exit(0);
             }
         }
+        FUNC_OUT
     }
 
     Call::Call(Id *id) : Typeable(TN_VOID) {
+        FUNC_IN
         auto func = symbol_table->getFunctionSymbol(id->name);
 
         if (func == nullptr) {
@@ -490,20 +541,26 @@ inline namespace grammar {
             output::errorPrototypeMismatch(yylineno, id->name, vec);
             exit(0);
         }
+        FUNC_OUT
     }
 
     ExpList::ExpList(Exp *exp) {
+        FUNC_IN
         exp_list.push_back(exp);
+        FUNC_OUT
     }
 
     ExpList::ExpList(Exp *exp, ExpList *expList) {
+        FUNC_IN
         exp_list.push_back(exp);
         exp_list.insert(exp_list.end(), expList->exp_list.begin(), expList->exp_list.end());
+        FUNC_OUT
     }
 
     Exp::Exp(Id *id) : Typeable(TN_VOID) {
+        FUNC_IN
         const auto &symbol_data_opt = symbol_table->getSymbol(id->name);
-        //////<<"id is: "<< id->name << " type: " << symbol_data_opt->getTypes().back() << std::endl;
+        //std::cout <<"id is: "<< id->name << " type: " << symbol_data_opt->getTypes().back() << std::endl;
         if (symbol_data_opt == nullptr) {
             output::errorUndef(yylineno, id->name);
             exit(0);
@@ -515,6 +572,7 @@ inline namespace grammar {
         this->type = symbol_data_opt->getTypes().back();
         this->value = symbol_data_opt->getName();
         this->reg = loadRegister(symbol_data_opt->getOffset(), symbol_data_opt->getTypes().back());
+        FUNC_OUT
     }
 
     Exp::Exp(Call *call) : Typeable(call->type) {
@@ -522,30 +580,38 @@ inline namespace grammar {
     }
 
     Exp::Exp(Num *num) : Typeable(TN_INT), value(to_string(num->value)) {
-        //////<< "type is " << type << std::endl;
+        FUNC_IN
+        //std::cout << "type is " << type << std::endl;
         this->reg = generate_register->nextRegister();
         //this->value = to_string(num->value);
         currinstr = code_buffer.emit("%" + this->reg + " = add i32 0, " + value);
+        FUNC_OUT
     }
 
     Exp::Exp(Num *num, B *b) : Typeable(TN_BYTE), value(to_string(num->value)) {
+        FUNC_IN
         if (num->value > 255) {
             output::errorByteTooLarge(yylineno, to_string(num->value));
+            FUNC_OUT
             exit(0);
         }
         this->reg = generate_register->nextRegister();
         currinstr = code_buffer.emit("%" + this->reg + " = add i8 0," + value);
+        FUNC_OUT
     }
 
     Exp::Exp(String *str) : Typeable(TN_STR), value(str->value) {
+        FUNC_IN
         this->reg = generate_register->nextRegister();
         code_buffer.emitGlobal("@" + reg + "= constant [" + to_string(value.size() - 2) + " x i8] c" + value);
         currinstr = code_buffer.emit(
                 "%" + reg + "= getelementptr [" + to_string(value.size() - 2 ) + " x i8], [" + to_string(value.size() - 2) +
                 " x i8]* @" + reg + ", i8 0, i8 0");
+        FUNC_OUT
     }
 
     Exp::Exp(Boolean *boolean) : Typeable(TN_BOOL), value(to_string(boolean->value)) {
+        FUNC_IN
         this->reg = generate_register->nextRegister();
         //currinstr = code_buffer.emit("%" + this->reg + " = add i1 0," + value);
         /**
@@ -558,11 +624,12 @@ inline namespace grammar {
             ////<< "true\n";
         } else {
             this->false_list = list;
-        }
-        ////<< "arrived here3\n";**/
+        }**/
+        FUNC_OUT
     }
 
     Exp::Exp(Not *_not, Exp *exp) : Typeable(TN_BOOL) {
+        FUNC_IN
         TypeAssert(exp, TN_BOOL);
         if (exp->value == "0") {
             this->value = "1";
@@ -573,9 +640,11 @@ inline namespace grammar {
         //currinstr = code_buffer.emit("%" + this->reg + " = add i1 1," + exp->reg);
         this->false_list = exp->true_list;
         this->true_list = exp->false_list;
+        FUNC_OUT
     }
 
     Exp::Exp(Exp *exp1, And *_and, Exp *exp2, Label* label) : Typeable(TN_BOOL) {
+        FUNC_IN
         TypeAssert(exp1, TN_BOOL);
         TypeAssert(exp2, TN_BOOL);
 
@@ -592,6 +661,7 @@ inline namespace grammar {
         this->true_list = exp2->true_list;
         this->false_list = CodeBuffer::merge(exp1->false_list,exp2->false_list);
         this->label = exp2->label;
+        FUNC_OUT
 
         /**
         int false_location = code_buffer.emit("br label @");
@@ -608,12 +678,14 @@ inline namespace grammar {
     }
 
     Exp::Exp(Exp *exp1, Or *_or, Exp *exp2, Label* label) : Typeable(TN_BOOL) {
+        FUNC_IN
         TypeAssert(exp1, TN_BOOL);
         TypeAssert(exp2, TN_BOOL);
 
         code_buffer.bpatch(exp1->false_list,label->label_name);
         this->false_list = exp2->false_list;
         this->true_list = CodeBuffer::merge(exp1->true_list,exp2->true_list);
+        FUNC_OUT
         /**
         this->reg = generate_register->nextRegister();
         this->false_list = vector<pair<int, BranchLabelIndex>>();
@@ -652,6 +724,7 @@ inline namespace grammar {
     }
 
     Exp::Exp(Exp *exp1, Relop *relop, Exp *exp2) : Typeable(TN_BOOL) {
+        FUNC_IN
         if (!isNumeric(exp1->type) || !isNumeric(exp2->type)) {
             //////<< "error in relop" << "\n";
             output::errorMismatch(yylineno);
@@ -668,22 +741,27 @@ inline namespace grammar {
     }
 
     Exp::Exp(Type *type, Exp *exp) : Typeable(type->type) {
+        FUNC_IN
         if (!canExplicitlyAssign(exp->type, type->type)) {
             output::errorMismatch(yylineno);
+            FUNC_OUT
             exit(0);
         }
         this->reg = generate_register->nextRegister();
         this->label = exp->label;
+        FUNC_OUT
     }
 
     Exp::Exp(Exp *exp) : Typeable(exp->type), reg(exp->reg), false_list(exp->false_list), true_list(exp->true_list) ,label(exp->label){
+        FUNC_IN
         //code_buffer.emit("(exp)="+convert_type(exp->type));
+        FUNC_OUT
     }
 
 
     Exp::Exp(Exp *exp1, If *_if, Exp *exp2, Else *_else, Exp *exp3) : Typeable(exp3->type) {
+        FUNC_IN
         TypeAssert(exp2, TN_BOOL);
-
         if (exp1->type != exp3->type and !canExplicitlyAssign(exp1->type, exp3->type)) {
             output::errorMismatch(yylineno);
             exit(0);
@@ -691,13 +769,13 @@ inline namespace grammar {
         if (exp1->type == TN_INT or exp3->type == TN_INT) {
             type = TN_INT;
         }
-
-
+        FUNC_OUT
     }
 
 
     Exp::Exp(Exp *exp1, Binop *binop, Exp *exp2) : Typeable(
             exp1->type == TN_INT || exp2->type == TN_INT ? TN_INT : TN_BYTE) {
+        FUNC_IN
         if (!isNumeric(exp1->type) || !isNumeric(exp2->type)) {
             output::errorMismatch(yylineno);
             //////<< "exp1 type: " << exp1->type << " exp2 type: " << exp2->type << "\n";
@@ -748,9 +826,11 @@ inline namespace grammar {
             code_buffer.bpatch(std::vector{make_pair(need_back_patch, SECOND)}, no_div_zero);
         }
         currinstr = code_buffer.emit("%" + this->reg + " = " + op + " " + exp_size + " %" + reg_left + ", %" + reg_right);
+        FUNC_OUT
     }
 
-    Exp::Exp(const string& x, Exp *exp) : Typeable(TN_BOOL), reg(exp->reg), false_list(exp->false_list), true_list(exp->true_list), label(exp->label) {
+    Exp::Exp(const string& x, Exp *exp) : Typeable(TN_BOOL), reg(exp->reg), false_list(exp->false_list), true_list(exp->true_list) {
+        FUNC_IN
         TypeAssert(exp, TN_BOOL);
         if(exp->value =="true" || exp->value == "false") {
             int loc = code_buffer.emit("br i1 " + exp->reg + ", label @ , label @");
@@ -759,11 +839,14 @@ inline namespace grammar {
         }
         code_buffer.bpatch(exp->true_list, this->label);
         ////<< "not exp" << endl;
+        FUNC_OUT
     }
 
     void end_function(RetType* ret) {
+        FUNC_IN
         current_function = "";
         closeScope();
         closeFunction(ret);
+        FUNC_OUT
     }
 }

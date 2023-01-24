@@ -8,8 +8,6 @@
 
 inline namespace lexical {
 
-
-
     Boolean::Boolean(bool flag):value(flag) {
     }
 

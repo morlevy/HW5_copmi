@@ -9,10 +9,11 @@
 #define HW3_DEBUG 1
 
 //Macro's flags
-#define LEXEME_IN_TOKEN ((HW3_DEBUG) && 1)
-#define EXIT_PRINT_FLAG ((HW3_DEBUG) && 1)
+#define LEXEME_IN_TOKEN  ((HW3_DEBUG) && 1)
+#define EXIT_PRINT_FLAG  ((HW3_DEBUG) && 1)
 #define PRINT_PARAM_FLAG ((HW3_DEBUG) && 1)
-#define DO_DEBUG_FLAG ((HW3_DEBUG) && 1)
+#define DO_DEBUG_FLAG    ((HW3_DEBUG) && 1)
+#define FUNC_IN_OUT_FLAG ((HW3_DEBUG) && 1)
 
 
 
@@ -41,5 +42,14 @@
 #define DO_DEBUG(parameter)
 #endif
 
+#if FUNC_IN_OUT_FLAG
+#define FUNC_IN \
+do {std::cout << __PRETTY_FUNCTION__ << "--> in -->" << '\n';} while(0);
+#define FUNC_OUT \
+do {std::cout << __PRETTY_FUNCTION__ << "<-- out <--" << '\n';} while(0);
+#else
+#define FUNC_IN
+#define FUNC_OUT
+#endif
 
 #endif //HW3_MACROS_H
