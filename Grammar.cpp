@@ -137,9 +137,9 @@ inline namespace grammar {
         }
         /**
         DO_DEBUG(
-                cout << "______Global:______\n";
+                ////<< "______Global:______\n";
                 CodeBuffer::instance().printGlobalBuffer();
-                cout << "______Code:______\n";
+                ////<< "______Code:______\n";
                 CodeBuffer::instance().printCodeBuffer();
         );**/
         curr_scope.symbols.clear();
@@ -245,8 +245,11 @@ inline namespace grammar {
     }
 
     N::N() {
-        next_list = CodeBuffer::makelist({currinstr+1,FIRST});
+        // generate label for else and bpatch it with Exp falselist later on
         currinstr = code_buffer.emit("br label @");
+        this->label = code_buffer.genLabel();
+
+        this->next_list = CodeBuffer::makelist({currinstr,FIRST});
     }
 
     void closeFunction(RetType *retType) {
@@ -280,9 +283,9 @@ inline namespace grammar {
     }
 
     Statements::Statements(Statement *statement) {
-        cout << "statement next list size: " << statement->next_list.size() << endl;
+        ////<< "statement next list size: " << statement->next_list.size() << endl;
         this->next_list = statement->next_list;
-        cout << "statement2" << endl;
+        ////<< "statement2" << endl;
     }
 
     Statements::Statements(Statements *statements, Statement *statement, Label* label) {
@@ -349,6 +352,7 @@ inline namespace grammar {
             exit(0);
         }
         symbol_type->setRegister(exp->reg);
+        //this->next_list = CodeBuffer::makelist({currinstr + 1, FIRST});
         //this->value = generate_register->nextRegister();
 
     }
@@ -379,21 +383,34 @@ inline namespace grammar {
         }
     }
 
-    Statement::Statement(If *if_, Exp *exp,Label* label, Statement* statement) {
+    Statement::Statement(If *if_, Exp *exp, Statement* statement) {
         TypeAssert(exp, TN_BOOL);
-        cout << "if" << endl;
-        code_buffer.bpatch(exp->true_list, label->label_name);
-        cout << "arrived here 1\n";
+        ////<< "if" << endl;
+        //code_buffer.bpatch(exp->true_list, label->label_name);
+        ////<< "arrived here 1\n";
         this->next_list = CodeBuffer::merge(exp->false_list, statement->next_list);
-        cout << "arrived here 2\n";
+        ////<< "arrived here 2\n";
+
+        currinstr = code_buffer.emit("br label @");
+        code_buffer.bpatch(CodeBuffer::merge(exp->false_list, CodeBuffer::makelist({currinstr, FIRST})), code_buffer.genLabel());
     }
 
-    Statement::Statement(If *_if, Exp *exp,Label* label1,Statement* statement1,N* n, Else *_else, Label* label2, Statement* statement2) {
+    Statement::Statement(If *_if, Exp *exp,Statement* statement1,N* n, Else *_else, Statement* statement2) {
         TypeAssert(exp, TN_BOOL);
-        code_buffer.bpatch(exp->true_list, label1->label_name);
-        code_buffer.bpatch(exp->false_list, label2->label_name);
-        this->next_list = CodeBuffer::merge(CodeBuffer::merge(statement1->next_list, n->next_list), statement2->next_list);
-        cout << "arrived here 6\n" << "and next list size is " << this->next_list.size() << endl;
+        //code_buffer.bpatch(exp->true_list, label1->label_name);
+        //code_buffer.bpatch(exp->false_list, label2->label_name);
+
+        ////<< "size of statement1 next list: " << statement1->next_list.size() << endl;
+        ////<< "size of statement2 next list: " << statement2->next_list.size() << endl;
+        ////<< "size of n next list: " << n->next_list.size() << endl;
+        //this->next_list = CodeBuffer::merge(CodeBuffer::merge(statement1->next_list, n->next_list), statement2->next_list);
+        ////<< "arrived here 6\n" << "and next list size is " << this->next_list.size() << endl;
+
+        int loc = code_buffer.emit("br label @");
+        string label2 = code_buffer.genLabel();
+        code_buffer.bpatch(code_buffer.merge(n->next_list, code_buffer.makelist({loc, FIRST})), label2);
+        code_buffer.bpatch(exp->false_list, n->label);
+        statement2->next_list = code_buffer.merge(statement1->next_list, statement2->next_list);
     }
 
     Statement::Statement(While *_while, Exp *exp) {
@@ -423,9 +440,9 @@ inline namespace grammar {
     }
 
     Statement::Statement(Statements *s) {
-        cout << "arrived here 4 size is: " << s->next_list.size() << endl;
+        ////<< "arrived here 4 size is: " << s->next_list.size() << endl;
         this->next_list = s->next_list;
-        cout << "arrived here 5\n";
+        ////<< "arrived here 5\n";
     }
 
     Call::Call(Id *id, ExpList *expList) : Typeable(TN_VOID) {
@@ -486,7 +503,7 @@ inline namespace grammar {
 
     Exp::Exp(Id *id) : Typeable(TN_VOID) {
         const auto &symbol_data_opt = symbol_table->getSymbol(id->name);
-        //std::cout <<"id is: "<< id->name << " type: " << symbol_data_opt->getTypes().back() << std::endl;
+        //////<<"id is: "<< id->name << " type: " << symbol_data_opt->getTypes().back() << std::endl;
         if (symbol_data_opt == nullptr) {
             output::errorUndef(yylineno, id->name);
             exit(0);
@@ -505,8 +522,9 @@ inline namespace grammar {
     }
 
     Exp::Exp(Num *num) : Typeable(TN_INT), value(to_string(num->value)) {
-        //std::cout << "type is " << type << std::endl;
+        //////<< "type is " << type << std::endl;
         this->reg = generate_register->nextRegister();
+        //this->value = to_string(num->value);
         currinstr = code_buffer.emit("%" + this->reg + " = add i32 0, " + value);
     }
 
@@ -530,17 +548,18 @@ inline namespace grammar {
     Exp::Exp(Boolean *boolean) : Typeable(TN_BOOL), value(to_string(boolean->value)) {
         this->reg = generate_register->nextRegister();
         //currinstr = code_buffer.emit("%" + this->reg + " = add i1 0," + value);
+        /**
         currinstr = code_buffer.emit("br label @");
         auto list = CodeBuffer::makelist({currinstr,FIRST});
         this->false_list ={};
         this->true_list = {};
         if(boolean->value){
             this->true_list = list;
-            cout << "true\n";
+            ////<< "true\n";
         } else {
             this->false_list = list;
         }
-        cout << "arrived here3\n";
+        ////<< "arrived here3\n";**/
     }
 
     Exp::Exp(Not *_not, Exp *exp) : Typeable(TN_BOOL) {
@@ -560,11 +579,19 @@ inline namespace grammar {
         TypeAssert(exp1, TN_BOOL);
         TypeAssert(exp2, TN_BOOL);
 
+        code_buffer.bpatch(exp1->true_list,label->label_name);
+
+        int loc = code_buffer.emit("br i1 " + exp2->reg + ", label @ , label @");
+        exp2->true_list = code_buffer.merge(exp2->true_list, code_buffer.makelist({loc, FIRST}));
+        exp2->false_list = code_buffer.merge(exp2->false_list, code_buffer.makelist({loc, SECOND}));
+        exp2->label = code_buffer.genLabel();
+
         //int label_location = code_buffer.emit("br i1 %" + exp1->reg + ", label @, label @");
         //this->reg = generate_register->nextRegister();
-        code_buffer.bpatch(exp1->true_list,label->label_name);
+
         this->true_list = exp2->true_list;
         this->false_list = CodeBuffer::merge(exp1->false_list,exp2->false_list);
+        this->label = exp2->label;
 
         /**
         int false_location = code_buffer.emit("br label @");
@@ -626,16 +653,18 @@ inline namespace grammar {
 
     Exp::Exp(Exp *exp1, Relop *relop, Exp *exp2) : Typeable(TN_BOOL) {
         if (!isNumeric(exp1->type) || !isNumeric(exp2->type)) {
-            //std::cout << "error in relop" << "\n";
+            //////<< "error in relop" << "\n";
             output::errorMismatch(yylineno);
             exit(0);
         }
         this->reg = generate_register->nextRegister();
         //code_buffer.emit("relop value: " + to_string((relop->value)));
         currinstr = code_buffer.emit("%" + this->reg + " = icmp " + convert_to_llvm_relop(relop->value) + " i32 %" + exp1->reg + ", %" + exp2->reg);
+        currinstr = code_buffer.emit("br i1 %" + this->reg + ", label @, label @");
         this->true_list = CodeBuffer::makelist({currinstr,FIRST});
         this->false_list = CodeBuffer::makelist({currinstr,SECOND});
-        code_buffer.emit("br i1 %" + this->reg + ", label @, label @");
+        //code_buffer.bpatch(this->true_list, );
+        this->label = code_buffer.genLabel();
     }
 
     Exp::Exp(Type *type, Exp *exp) : Typeable(type->type) {
@@ -644,10 +673,11 @@ inline namespace grammar {
             exit(0);
         }
         this->reg = generate_register->nextRegister();
+        this->label = exp->label;
     }
 
-    Exp::Exp(Exp *exp) : Typeable(exp->type), reg(exp->reg), false_list(exp->false_list), true_list(exp->true_list) {
-        code_buffer.emit("(exp)="+convert_type(exp->type));
+    Exp::Exp(Exp *exp) : Typeable(exp->type), reg(exp->reg), false_list(exp->false_list), true_list(exp->true_list) ,label(exp->label){
+        //code_buffer.emit("(exp)="+convert_type(exp->type));
     }
 
 
@@ -670,10 +700,10 @@ inline namespace grammar {
             exp1->type == TN_INT || exp2->type == TN_INT ? TN_INT : TN_BYTE) {
         if (!isNumeric(exp1->type) || !isNumeric(exp2->type)) {
             output::errorMismatch(yylineno);
-            //std::cout << "exp1 type: " << exp1->type << " exp2 type: " << exp2->type << "\n";
+            //////<< "exp1 type: " << exp1->type << " exp2 type: " << exp2->type << "\n";
             exit(0);
         }
-        //cout << "regs: " << exp1->reg << " " << exp2->reg << endl;
+        //////<< "regs: " << exp1->reg << " " << exp2->reg << endl;
         //TODO: verify signed vs unsigned, implement void @error_division_by_zero()
         this->reg = generate_register->nextRegister();
         std::string reg_left = exp1->reg;
@@ -720,9 +750,15 @@ inline namespace grammar {
         currinstr = code_buffer.emit("%" + this->reg + " = " + op + " " + exp_size + " %" + reg_left + ", %" + reg_right);
     }
 
-    Exp::Exp(const string& x, Exp *exp) : Typeable(TN_BOOL), reg(exp->reg), false_list(exp->false_list), true_list(exp->true_list) {
+    Exp::Exp(const string& x, Exp *exp) : Typeable(TN_BOOL), reg(exp->reg), false_list(exp->false_list), true_list(exp->true_list), label(exp->label) {
         TypeAssert(exp, TN_BOOL);
-        cout << "not exp" << endl;
+        if(exp->value =="true" || exp->value == "false") {
+            int loc = code_buffer.emit("br i1 " + exp->reg + ", label @ , label @");
+            exp->true_list = code_buffer.merge(exp->true_list, code_buffer.makelist({loc, FIRST}));
+            exp->false_list = code_buffer.merge(exp->false_list, code_buffer.makelist({loc, SECOND}));
+        }
+        code_buffer.bpatch(exp->true_list, this->label);
+        ////<< "not exp" << endl;
     }
 
     void end_function(RetType* ret) {

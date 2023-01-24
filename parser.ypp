@@ -76,15 +76,15 @@ Statement_   : LBRACE StartScope Statements_ MC RBRACE { $$ = new Statement( sta
 		    |Call_ SC  { $$ = new Statement( static_cast<Call *>($1)); }
             | RETURN SC  { $$ = new Statement( static_cast<Return *>($1)); }
 		    |RETURN Exp_ SC  {  $$ = new Statement( static_cast<Return *>($1),static_cast<Exp *>($2)); }
-            | IF LPAREN REDUCE_EXP RPAREN M Statement_ {std::cout << "if statement\n"; $$ = new Statement(static_cast<If*>($1),static_cast<Exp*>($3),static_cast<Label*>($5),static_cast<Statement*>($6)); closeScope();}
-		    |IF LPAREN REDUCE_EXP RPAREN M Statement_ Else_ M Statement_ {std::cout << "if else statement\n"; $$ = new Statement( static_cast<If *>($1),static_cast<Exp *>($3),static_cast<Label*>($5),static_cast<Statement*>($6),n,static_cast<Else *>($7),static_cast<Label*>($8),static_cast<Statement*>($9)); closeScope();} MC
+            | IF LPAREN REDUCE_EXP RPAREN M Statement_ {$$ = new Statement(static_cast<If*>($1),static_cast<Exp*>($3),static_cast<Statement*>($6)); closeScope(); }
+		    |IF LPAREN REDUCE_EXP RPAREN M Statement_ Else_ Statement_ {$$ = new Statement( static_cast<If *>($1),static_cast<Exp *>($3),static_cast<Statement*>($6),n,static_cast<Else *>($7),static_cast<Statement*>($8));  closeScope(); closeScope(); }
             | WHILE LPAREN REDUCE_EXP RPAREN  {startScope(); start_while();} Statement_ { $$ = new Statement( static_cast<While *>($1),static_cast<Exp *>($3)); end_while(); closeScope();}
 		    |BREAK SC { $$ = new Statement( static_cast<Break *>($1)); }
             | CONTINUE SC { $$ = new Statement( static_cast<Continue *>($1)); };
-Else_        : ELSE { $$ = new Else(); n = new N();}
-Call_      : ID LPAREN ExpList_ RPAREN { std::cout << "call\n"; $$ = new Call( static_cast<Id *>($1),static_cast<ExpList *>($3)); }
+Else_        : ELSE { $$ = new Else(); n = new N(); startScope();}
+Call_      : ID LPAREN ExpList_ RPAREN {  $$ = new Call( static_cast<Id *>($1),static_cast<ExpList *>($3)); }
             | ID LPAREN RPAREN { $$ = new Call( static_cast<Id *>($1)); }
-ExpList_    : Exp_ { std::cout << "call\n"; $$ = new ExpList(  static_cast<Exp *>($1)); }
+ExpList_    : Exp_ {  $$ = new ExpList(  static_cast<Exp *>($1)); }
             | Exp_ COMMA ExpList_ { $$ = new ExpList( static_cast<Exp *>($1),static_cast<ExpList *>($3)); };
 Type_        : INT { $$ = new Type( TN_INT ); }
             | BYTE { $$ = new Type( TN_BYTE ); }
@@ -110,11 +110,10 @@ Exp_         : LPAREN Exp_ RPAREN { $$ = new Exp( static_cast<Exp *>($2)); }
             | LPAREN Type_ RPAREN Exp_ { $$ = new Exp( static_cast<Type *>($2),static_cast<Exp *>($4)); };
 
 StartScope: {startScope();};
-Label: {std::cout << "new label\n"; $$ = new Label(); }
+Label: { $$ = new Label(); }
 M_ANDOR : {$$ = new Label();}
-N: { $$ = new N(); }
-M :         {std::cout << "M\n"; startScope(); $$ = new Label();}
-MC :        {std::cout << "MC\n"; closeScope();}
+M :         { startScope(); $$ = new Label();}
+MC :        {closeScope();}
 REDUCE_EXP:  Exp_ {$$ = new Exp( "If",static_cast<Exp *>($1));}
 %%
 

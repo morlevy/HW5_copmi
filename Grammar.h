@@ -50,6 +50,7 @@ inline namespace grammar{
 
     struct N : public Node {
         vector<pair<int,BranchLabelIndex>> next_list;
+        std::string label;
         N();
     };
 
@@ -105,8 +106,8 @@ inline namespace grammar{
         Statement(Call*);
         Statement(Return*);
         Statement(Return*, Exp*);
-        Statement(If*, Exp*,Label*,Statement*);
-        Statement(If*,Exp*,Label*,Statement*,N*, Else*,Label*,Statement*);
+        Statement(If*, Exp*,Statement*);
+        Statement(If*,Exp*,Statement*,N*, Else*,Statement*);
         Statement(While*,Exp*);
         Statement(Break*);
         Statement(Continue*);
@@ -131,6 +132,7 @@ inline namespace grammar{
         std::string reg;
         std::vector<pair<int,BranchLabelIndex>> true_list;
         std::vector<pair<int,BranchLabelIndex>> false_list;
+        std::string label;
 
         explicit Exp(Id*);
         explicit Exp(Call*);
