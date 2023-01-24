@@ -58,56 +58,56 @@ N* n;
 //Derivation Rules:
 Program_     : {  $$ = new Program();  } Funcs_  {if(yychar == YYEOF){  endProgram();} };
 Funcs_       : FuncDecl_ Funcs_ { $$ = new Funcs(); }
-                | {$$ = new Funcs( );};
+| {$$ = new Funcs( );};
 FuncDecl_    : RelType_ ID LPAREN Formals_ RPAREN { $$ = new FuncDecl( static_cast<RetType *>($1),static_cast<Id *>($2),static_cast<Formals *>($4));} LBRACE Statements_ { end_function(static_cast<RetType *>($1));} RBRACE ;
 RelType_     : Type_ {$$ = new RetType( static_cast<Type *>($1)->type); }
-                | VOID { $$ = new RetType( TN_VOID); }
+| VOID { $$ = new RetType( TN_VOID); }
 Formals_    : FormalsList_ { $$ = new Formals( static_cast<FormalsList *>($1)); }
-                | { $$ = new Formals( ); };
+| { $$ = new Formals( ); };
 FormalsList_ : FormalDecl_  { $$ = new FormalsList( static_cast<FormalDecl *>($1)); }
-                | FormalDecl_  COMMA FormalsList_ { $$ = new FormalsList( static_cast<FormalDecl *>($1),static_cast<FormalsList *>($3)); };
+| FormalDecl_  COMMA FormalsList_ { $$ = new FormalsList( static_cast<FormalDecl *>($1),static_cast<FormalsList *>($3)); };
 FormalDecl_   : Type_ ID  { $$ = new FormalDecl( static_cast<Type *>($1),static_cast<Id *>($2)); };
 Statements_  : Statement_ { $$ = new Statements( static_cast<Statement *>($1)); }
-                | Statements_ Statement_ { $$ = new Statements( static_cast<Statements *>($1),static_cast<Statement *>($2)); };
+| Statements_ Statement_ { $$ = new Statements( static_cast<Statements *>($1),static_cast<Statement *>($2)); };
 Statement_   : LBRACE StartScope Statements_ MC RBRACE { $$ = new Statement( static_cast<Statements *>($3)); }
-                | Type_ ID SC  { $$ = new Statement( static_cast<Type *>($1),static_cast<Id *>($2)); }
-                |Type_ ID ASSIGN Exp_ SC { $$ = new Statement( static_cast<Type *>($1),static_cast<Id *>($2),static_cast<Exp *>($4)); }
-                | ID ASSIGN Exp_ SC { $$ = new Statement( static_cast<Id *>($1),static_cast<Assign *>($2),static_cast<Exp *>($3)); }
-                |Call_ SC  { $$ = new Statement( static_cast<Call *>($1)); }
-                | RETURN SC  { $$ = new Statement( static_cast<Return *>($1)); }
-                |RETURN Exp_ SC  {  $$ = new Statement( static_cast<Return *>($1),static_cast<Exp *>($2)); }
-                | IF LPAREN REDUCE_EXP RPAREN M Statement_ {$$ = new Statement(static_cast<If*>($1),static_cast<Exp*>($3),static_cast<Statement*>($6)); closeScope(); }
-                |IF LPAREN REDUCE_EXP RPAREN M Statement_ Else_ Statement_ {$$ = new Statement( static_cast<If *>($1),static_cast<Exp *>($3),static_cast<Statement*>($6),n,static_cast<Else *>($7),static_cast<Statement*>($8));  closeScope(); closeScope(); }
-                | WHILE LPAREN REDUCE_EXP RPAREN  {startScope(); start_while();} Statement_ { $$ = new Statement( static_cast<While *>($1),static_cast<Exp *>($3)); end_while(); closeScope();}
-                |BREAK SC { $$ = new Statement( static_cast<Break *>($1)); }
-                | CONTINUE SC { $$ = new Statement( static_cast<Continue *>($1)); };
+| Type_ ID SC  { $$ = new Statement( static_cast<Type *>($1),static_cast<Id *>($2)); }
+|Type_ ID ASSIGN Exp_ SC { $$ = new Statement( static_cast<Type *>($1),static_cast<Id *>($2),static_cast<Exp *>($4)); }
+| ID ASSIGN Exp_ SC { $$ = new Statement( static_cast<Id *>($1),static_cast<Assign *>($2),static_cast<Exp *>($3)); }
+|Call_ SC  { $$ = new Statement( static_cast<Call *>($1)); }
+| RETURN SC  { $$ = new Statement( static_cast<Return *>($1)); }
+|RETURN Exp_ SC  {  $$ = new Statement( static_cast<Return *>($1),static_cast<Exp *>($2)); }
+| IF LPAREN REDUCE_EXP RPAREN M Statement_ {$$ = new Statement(static_cast<If*>($1),static_cast<Exp*>($3),static_cast<Statement*>($6)); closeScope(); }
+|IF LPAREN REDUCE_EXP RPAREN M Statement_ Else_ Statement_ {$$ = new Statement( static_cast<If *>($1),static_cast<Exp *>($3),static_cast<Statement*>($6),n,static_cast<Else *>($7),static_cast<Statement*>($8));  closeScope(); closeScope(); }
+| WHILE LPAREN REDUCE_EXP RPAREN  {startScope(); start_while();} Statement_ { $$ = new Statement( static_cast<While *>($1),static_cast<Exp *>($3)); end_while(); closeScope();}
+|BREAK SC { $$ = new Statement( static_cast<Break *>($1)); }
+| CONTINUE SC { $$ = new Statement( static_cast<Continue *>($1)); };
 Else_        : ELSE { $$ = new Else(); n = new N(false); startScope();}
 Call_      : ID LPAREN ExpList_ RPAREN {  $$ = new Call( static_cast<Id *>($1),static_cast<ExpList *>($3)); }
-                | ID LPAREN RPAREN { $$ = new Call( static_cast<Id *>($1)); }
+| ID LPAREN RPAREN { $$ = new Call( static_cast<Id *>($1)); }
 ExpList_    : Exp_ {  $$ = new ExpList(  static_cast<Exp *>($1)); }
-                | Exp_ COMMA ExpList_ { $$ = new ExpList( static_cast<Exp *>($1),static_cast<ExpList *>($3)); };
+| Exp_ COMMA ExpList_ { $$ = new ExpList( static_cast<Exp *>($1),static_cast<ExpList *>($3)); };
 Type_        : INT { $$ = new Type( TN_INT ); }
-                | BYTE { $$ = new Type( TN_BYTE ); }
-                | BOOL { $$ = new Type( TN_BOOL ); };
+| BYTE { $$ = new Type( TN_BYTE ); }
+| BOOL { $$ = new Type( TN_BOOL ); };
 Exp_         : LPAREN Exp_ RPAREN { $$ = new Exp( static_cast<Exp *>($2)); }
-                | %prec PRECX Exp_ IF LPAREN Exp_ RPAREN ELSE Exp_ { $$ = new Exp(static_cast<Exp *>($1),static_cast<If *>($2),static_cast<Exp *>($4),static_cast<Else *>($6),static_cast<Exp *>($7));};
-                | Exp_ ADD Exp_ { $$ = new Exp( static_cast<Exp *>($1),static_cast<Binop *>($2),static_cast<Exp *>($3)); }
-                | Exp_ SUB Exp_ { $$ = new Exp( static_cast<Exp *>($1),static_cast<Binop *>($2),static_cast<Exp *>($3)); }
-                | Exp_ DIV Exp_ { $$ = new Exp( static_cast<Exp *>($1),static_cast<Binop *>($2),static_cast<Exp *>($3)); }
-                | Exp_ MUL Exp_ { $$ = new Exp( static_cast<Exp *>($1),static_cast<Binop *>($2),static_cast<Exp *>($3)); }
-                | ID { $$ = new Exp( static_cast<Id *>($1)); }
-                | Call_ { $$ = new Exp( static_cast<Call *>($1)); }
-                | NUM { $$ = new Exp( static_cast<Num *>($1)); }
-                | NUM B_TOKEN  { $$ = new Exp( static_cast<Num *>($1),static_cast<B *>($2)); }
-                | STRING { $$ = new Exp( static_cast<String *>($1)); }
-                | TRUE { $$ = new Exp( static_cast<Boolean *>($1)); }
-                | FALSE { $$ = new Exp( static_cast<Boolean *>($1)); }
-                | NOT Exp_ { $$ = new Exp( static_cast<Not *>($1),static_cast<Exp *>($2)); }
-                | Exp_ RELOP Exp_ {$$ = new Exp( static_cast<Exp *>($1),static_cast<Relop *>($2),static_cast<Exp *>($3)); }
-                | Exp_ RELOP2 Exp_ { $$ = new Exp( static_cast<Exp *>($1),static_cast<Relop *>($2),static_cast<Exp *>($3)); }
-                | Exp_ AND {n = new N(true,static_cast<Exp *>($1)); } Exp_ { $$ = new Exp( static_cast<Exp *>($1),static_cast<And *>($2),static_cast<Exp *>($4)); }
-                | Exp_ OR {n = new N(true,static_cast<Exp *>($1)); } Exp_ { $$ = new Exp( static_cast<Exp *>($1),static_cast<Or *>($2),static_cast<Exp *>($4)); }
-                | LPAREN Type_ RPAREN Exp_ { $$ = new Exp( static_cast<Type *>($2),static_cast<Exp *>($4)); };
+| %prec PRECX Exp_ IF LPAREN Exp_ RPAREN ELSE Exp_ { $$ = new Exp(static_cast<Exp *>($1),static_cast<If *>($2),static_cast<Exp *>($4),static_cast<Else *>($6),static_cast<Exp *>($7));};
+| Exp_ ADD Exp_ { $$ = new Exp( static_cast<Exp *>($1),static_cast<Binop *>($2),static_cast<Exp *>($3)); }
+| Exp_ SUB Exp_ { $$ = new Exp( static_cast<Exp *>($1),static_cast<Binop *>($2),static_cast<Exp *>($3)); }
+| Exp_ DIV Exp_ { $$ = new Exp( static_cast<Exp *>($1),static_cast<Binop *>($2),static_cast<Exp *>($3)); }
+| Exp_ MUL Exp_ { $$ = new Exp( static_cast<Exp *>($1),static_cast<Binop *>($2),static_cast<Exp *>($3)); }
+| ID { $$ = new Exp( static_cast<Id *>($1)); }
+| Call_ { $$ = new Exp( static_cast<Call *>($1)); }
+| NUM { $$ = new Exp( static_cast<Num *>($1)); }
+| NUM B_TOKEN  { $$ = new Exp( static_cast<Num *>($1),static_cast<B *>($2)); }
+| STRING { $$ = new Exp( static_cast<String *>($1)); }
+| TRUE { $$ = new Exp( static_cast<Boolean *>($1)); }
+| FALSE { $$ = new Exp( static_cast<Boolean *>($1)); }
+| NOT Exp_ { $$ = new Exp( static_cast<Not *>($1),static_cast<Exp *>($2)); }
+| Exp_ RELOP Exp_ {$$ = new Exp( static_cast<Exp *>($1),static_cast<Relop *>($2),static_cast<Exp *>($3)); }
+| Exp_ RELOP2 Exp_ { $$ = new Exp( static_cast<Exp *>($1),static_cast<Relop *>($2),static_cast<Exp *>($3)); }
+| Exp_ AND {n = new N(true,static_cast<Exp *>($1)); } Exp_ { $$ = new Exp( static_cast<Exp *>($1),static_cast<And *>($2),static_cast<Exp *>($4)); }
+| Exp_ OR {n = new N(true,static_cast<Exp *>($1)); } Exp_ { $$ = new Exp( static_cast<Exp *>($1),static_cast<Or *>($2),static_cast<Exp *>($4)); }
+| LPAREN Type_ RPAREN Exp_ { $$ = new Exp( static_cast<Type *>($2),static_cast<Exp *>($4)); };
 
 StartScope: {startScope();};
 Label: { $$ = new Label(); }

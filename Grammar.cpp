@@ -509,8 +509,8 @@ inline namespace grammar {
     }
 
     Call::Call(Id *id, ExpList *expList) : Typeable(TN_VOID) {
-        auto func = symbol_table->getFunctionSymbol(id->name);
         FUNC_IN
+        auto func = symbol_table->getFunctionSymbol(id->name);
         if (func == nullptr) {
             output::errorUndefFunc(yylineno, id->name);
             exit(0);
@@ -518,7 +518,7 @@ inline namespace grammar {
         auto func_types = func->getTypes();
         type = func_types.back();
         func_types.pop_back();
-        vector<string> vector2;
+        vector<string> vector2{func_types.size()};
         for (auto type2: func_types) {
             vector2.push_back(convert_type(type2));
         }
@@ -533,6 +533,24 @@ inline namespace grammar {
                 exit(0);
             }
         }
+
+        std::string line = "call " + convert_type_llvm(type) + " @" + id->name + "(";
+        for(auto i = 0; i < func_types.size(); i++){
+            Exp& exp = *expList->exp_list[i];
+            auto arg_type = func_types[i];
+            if (arg_type == TN_INT && exp.type == TN_BYTE){
+                auto old_reg = exp.reg;
+                exp.reg = generate_register->nextRegister();
+                CodeBuffer::instance().emit("%" + exp.reg + " = zext i8" + old_reg + "to i32" );
+                exp.type = TN_INT;
+            }
+            line += convert_type_llvm(exp.type) + "%" + exp.reg;
+            if(i+1 < func_types.size()){
+                line += ", ";
+            }
+        }
+        line += ")";
+        CodeBuffer::instance().emit(line);
         FUNC_OUT
     }
 
@@ -549,13 +567,14 @@ inline namespace grammar {
         func_types.pop_back();
 
         if (func_types.back() != TN_VOID) {
-            vector<string> vec{};
+            vector<string> vec{func_types.size()};
             for (auto type: func_types) {
                 vec.push_back(convert_type(type));
             }
             output::errorPrototypeMismatch(yylineno, id->name, vec);
             exit(0);
         }
+        CodeBuffer::instance().emit("call " + convert_type_llvm(type) + " @" + id->name + "()");
         FUNC_OUT
     }
 
@@ -666,6 +685,7 @@ inline namespace grammar {
         code_buffer.bpatch(exp1->true_list,exp1->label);
 
         if(exp2->value == "true" || exp2->value == "false" || exp2->value == "1" || exp2->value == "0") {
+            code_buffer.emit("true or false check!!!");
             int loc = code_buffer.emit("br i1 " + exp2->reg + ", label @ , label @");
             exp2->true_list = code_buffer.merge(exp2->true_list, code_buffer.makelist({loc, FIRST}));
             exp2->false_list = code_buffer.merge(exp2->false_list, code_buffer.makelist({loc, SECOND}));
@@ -868,8 +888,6 @@ inline namespace grammar {
         this->true_list = exp->true_list;
         this->label = exp->label;
         this->reg = exp->reg;
-
-        ////<< "not exp" << endl;
         FUNC_OUT
     }
 
