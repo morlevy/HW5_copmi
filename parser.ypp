@@ -77,11 +77,11 @@ Statement_   : LBRACE StartScope Statements_ MC RBRACE { $$ = new Statement( sta
                 | RETURN SC  { $$ = new Statement( static_cast<Return *>($1)); }
                 |RETURN Exp_ SC  {  $$ = new Statement( static_cast<Return *>($1),static_cast<Exp *>($2)); }
                 | IF LPAREN REDUCE_EXP RPAREN M Statement_ {$$ = new Statement(static_cast<If*>($1),static_cast<Exp*>($3),static_cast<Statement*>($6)); closeScope(); }
-                |IF LPAREN REDUCE_EXP RPAREN M Statement_ Else_ Statement_ {$$ = new Statement( static_cast<If *>($1),static_cast<Exp *>($3),static_cast<Statement*>($6),n,static_cast<Else *>($7),static_cast<Statement*>($8));  closeScope(); closeScope(); }
+                |IF LPAREN REDUCE_EXP RPAREN M Statement_ Else_ {n = new N();} Statement_ {$$ = new Statement( static_cast<If *>($1),static_cast<Exp *>($3),static_cast<Statement*>($6),n,static_cast<Else *>($7),static_cast<Statement*>($8));  closeScope(); closeScope(); }
                 | WHILE LPAREN REDUCE_EXP RPAREN  {startScope(); start_while();} Statement_ { $$ = new Statement( static_cast<While *>($1),static_cast<Exp *>($3)); end_while(); closeScope();}
                 |BREAK SC { $$ = new Statement( static_cast<Break *>($1)); }
                 | CONTINUE SC { $$ = new Statement( static_cast<Continue *>($1)); };
-Else_        : ELSE { $$ = new Else(); n = new N(); startScope();}
+Else_        : ELSE { $$ = new Else(); startScope();}
 Call_      : ID LPAREN ExpList_ RPAREN {  $$ = new Call( static_cast<Id *>($1),static_cast<ExpList *>($3)); }
                 | ID LPAREN RPAREN { $$ = new Call( static_cast<Id *>($1)); }
 ExpList_    : Exp_ {  $$ = new ExpList(  static_cast<Exp *>($1)); }

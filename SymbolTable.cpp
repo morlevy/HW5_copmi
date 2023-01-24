@@ -88,13 +88,23 @@ const SymbolTable::FunctionSymbolData* SymbolTable::getFunctionSymbol(const stri
 }
 
 
-SymbolTable::SymbolData::SymbolData(int offset, std::string name, std::vector<Typename> types, std::string reg) : offset(offset),
-                                                                                     name(std::move(name)), types(std::move(types)) , reg(reg){
+SymbolTable::SymbolData::SymbolData(int offset, std::string name, std::vector<Typename> types, std::string reg, std::string value) : offset(offset),
+                                                                                     name(std::move(name)), types(std::move(types)) , reg(reg), value(value){
 
 }
 
 int SymbolTable::SymbolData::getOffset() const {
     return offset;
+}
+
+//get value
+const std::string& SymbolTable::SymbolData::getValue() const{
+    return value;
+}
+
+//set value
+void SymbolTable::SymbolData::setValue(std::string value1){
+    this->value = std::move(value1);
 }
 
 const string &SymbolTable::SymbolData::getName() const {
@@ -105,7 +115,7 @@ vector<Typename> SymbolTable::SymbolData::getTypes() const {
     return types;
 }
 
-SymbolTable::SymbolData::SymbolData(int offset, std::string name, Typename type, std::string reg): offset(offset),name(name),types(std::vector<Typename>{type}),reg(reg) {
+SymbolTable::SymbolData::SymbolData(int offset, std::string name, Typename type, std::string reg, std::string value): offset(offset),name(name),types(std::vector<Typename>{type}),reg(reg), value(value) {
 
 }
 

@@ -372,7 +372,7 @@ inline namespace grammar {
         currinstr = code_buffer.emit("store i32 %" + expReg + ", i32* %" + ptr);
         exp->reg = expReg;
         symbol_table->scopes.back().symbols.emplace_back(
-                new SymbolTable::SymbolData(offset, id->name, type->type, expReg));
+                new SymbolTable::SymbolData(offset, id->name, type->type, expReg, exp->value));
         FUNC_OUT
     }
 
@@ -395,6 +395,7 @@ inline namespace grammar {
             exit(0);
         }
         symbol_type->setRegister(exp->reg);
+        symbol_type->setValue(exp->value);
         //this->next_list = CodeBuffer::makelist({currinstr + 1, FIRST});
         //this->value = generate_register->nextRegister();
         FUNC_OUT
@@ -583,7 +584,7 @@ inline namespace grammar {
             exit(0);
         }
         this->type = symbol_data_opt->getTypes().back();
-        this->value = symbol_data_opt->getName();
+        //this->value = symbol_data_opt->getName(); TODO maybe change the value
         this->reg = loadRegister(symbol_data_opt->getOffset(), symbol_data_opt->getTypes().back());
         FUNC_OUT
     }
@@ -857,7 +858,7 @@ inline namespace grammar {
     Exp::Exp(const string& x, Exp *exp) : Typeable(TN_BOOL), reg(exp->reg), false_list(exp->false_list), true_list(exp->true_list) {
         FUNC_IN
         TypeAssert(exp, TN_BOOL);
-        if(exp->value =="true" || exp->value == "false") {
+        if(exp->value =="true" || exp->value == "false" || exp->value == "0" || exp->value == "1") {
             int loc = code_buffer.emit("br i1 " + exp->reg + ", label @ , label @");
             exp->true_list = code_buffer.merge(exp->true_list, code_buffer.makelist({loc, FIRST}));
             exp->false_list = code_buffer.merge(exp->false_list, code_buffer.makelist({loc, SECOND}));
