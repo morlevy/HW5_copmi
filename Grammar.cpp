@@ -657,7 +657,7 @@ inline namespace grammar {
     Exp::Exp(Boolean *boolean) : Typeable(TN_BOOL), value(to_string(boolean->value)) {
         FUNC_IN
         this->reg = generate_register->nextRegister();
-        //currinstr = code_buffer.emit("%" + this->reg + " = add i1 0," + value);
+        currinstr = code_buffer.emit("%" + this->reg + " = add i1 0," + value);
         /**
         currinstr = code_buffer.emit("br label @");
         auto list = CodeBuffer::makelist({currinstr,FIRST});
