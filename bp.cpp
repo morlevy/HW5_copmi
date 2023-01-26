@@ -34,12 +34,10 @@ void CodeBuffer::bpatch(const vector<pair<int,BranchLabelIndex>>& address_list, 
     for(vector<pair<int,BranchLabelIndex>>::const_iterator i = address_list.begin(); i != address_list.end(); i++){
     	int address = (*i).first;
     	BranchLabelIndex labelIndex = (*i).second;
-        PRINT_PARAM(buffer[address]);
-        PRINT_PARAM(label);
-        PRINT_PARAM(labelIndex);
+        auto before = buffer[address];
 		replace(buffer[address], "@", "%" + label, labelIndex);
-        PRINT_PARAM(buffer[address]);
-
+        auto after = buffer[address];
+        DO_DEBUG(cout << "BACKPATCH:\t" + before + "\t--->\t" + after + '\n';)
     }
 }
 

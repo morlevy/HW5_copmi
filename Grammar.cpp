@@ -8,6 +8,7 @@
 #include <iostream>
 #include "bp.hpp"
 #include "GenerateRegister.hpp"
+#include "parser.tab.hpp"
 
 using namespace std;
 SymbolTable *symbol_table;
@@ -264,22 +265,32 @@ ret void
         FUNC_OUT
     }
 
-    N::N(bool branch, Exp *exp) {
+    N::N(bool branch, Exp *exp, N* n) : label_stack(n!=nullptr ? n->label_stack : decltype(n->label_stack){}){
         FUNC_IN
         if (branch) {
-            currinstr = code_buffer.emit("br i1 %" + exp->reg + ", label @ , label @");
+            currinstr = code_buffer.emit("br i1 %" + exp->reg + ", label @ , label @ ; n-if");
             exp->true_list = CodeBuffer::merge(exp->true_list, CodeBuffer::makelist({currinstr, FIRST}));
             exp->false_list = CodeBuffer::merge(exp->false_list, CodeBuffer::makelist({currinstr, SECOND}));
             exp->label = code_buffer.genLabel();
             this->label = exp->label;
         } else {
-            currinstr = code_buffer.emit("br label @");
+            currinstr = code_buffer.emit("br label @ ; n-else");
             this->label = code_buffer.genLabel();
+            this->next_list = n != nullptr ?
+                              CodeBuffer::merge(n->next_list, CodeBuffer::makelist({currinstr, FIRST})) :
+                              CodeBuffer::makelist({currinstr, FIRST});
 
-            this->next_list = CodeBuffer::makelist({currinstr, FIRST});
+            label_stack.push_back(this->label);
+            PRINT_PARAM("STACK PUSH" + this->label);
         }
+        PRINT_PARAM(label_stack.size());
         FUNC_OUT
     }
+
+    void N::merge(N* n) {
+
+    }
+
 
 
     void closeFunction(RetType *retType) {
@@ -429,6 +440,21 @@ ret void
             FUNC_OUT
             exit(0);
         }
+
+        if(TN_BOOL == exp->type) {
+            auto label_true = exp->label;
+            code_buffer.bpatch(exp->true_list, label_true);
+            int label_true_loc = code_buffer.emit("br label @ ; t");
+            auto label_false = code_buffer.genLabel();
+            code_buffer.bpatch(exp->false_list, label_false);
+            int label_false_loc = code_buffer.emit("br label @ ; f");
+            auto phi_label = code_buffer.genLabel();
+            code_buffer.bpatch(code_buffer.makelist({label_true_loc, FIRST}), phi_label);
+            code_buffer.bpatch(code_buffer.makelist({label_false_loc, FIRST}), phi_label);
+            exp->reg = generate_register->nextRegister();
+            code_buffer.emit("%" + exp->reg + " = phi i1 [ 1, %" + label_true + "], [ 0, %" + label_false + "]");
+        }
+
         if(exp->type != TN_INT) {
             auto oldreg = exp->reg;
             exp->reg = generate_register->nextRegister();
@@ -446,9 +472,9 @@ ret void
         code_buffer.emit("store i32 %" + exp->reg + ", i32* %" + ptr);
         symbol_type->setRegister(exp->reg);
         symbol_type->setValue(exp->value);
-        code_buffer.bpatch(exp->false_list, exp->label);
-        code_buffer.bpatch(exp->true_list, exp->label);
-        code_buffer.bpatch(exp->next_list, exp->label);
+
+
+
         //this->next_list = CodeBuffer::makelist({currinstr + 1, FIRST});
         //this->value = generate_register->nextRegister();
         FUNC_OUT
@@ -535,8 +561,13 @@ ret void
         currinstr = code_buffer.emit("br label @");
         string label2 = code_buffer.genLabel();
         code_buffer.bpatch(CodeBuffer::merge(n->next_list, CodeBuffer::makelist({currinstr, FIRST})), label2);
-        code_buffer.bpatch(exp->false_list, n->label);
-        statement2->next_list = CodeBuffer::merge(statement1->next_list, statement2->next_list);
+        auto label = n->label_stack.back();
+        code_buffer.bpatch(exp->false_list, label);
+        n->label_stack.pop_back();
+        PRINT_PARAM("STACK POP" + label);
+        PRINT_PARAM(n->label_stack.size());
+
+        next_list = CodeBuffer::merge(statement1->next_list, statement2->next_list);
         FUNC_OUT
     }
 
@@ -813,7 +844,7 @@ ret void
         FUNC_OUT
     }
 
-    Exp::Exp(Not *_not, Exp *exp) : Typeable(TN_BOOL) {
+    Exp::Exp(Not *_not, Exp *exp) : Typeable(TN_BOOL), label(exp->label) {
         FUNC_IN
         TypeAssert(exp, TN_BOOL);
         if (exp->value == "0") {
@@ -845,8 +876,6 @@ ret void
         //int label_location = code_buffer.emit("br i1 %" + exp1->reg + ", label @, label @");
         //this->reg = generate_register->nextRegister();
         //TODO why
-        this->reg = generate_register->nextRegister("OR");
-        code_buffer.emit("%"+reg+" = or i1 %"+exp1->reg+", %"+exp2->reg);
         this->true_list = exp2->true_list;
         this->false_list = CodeBuffer::merge(exp1->false_list, exp2->false_list);
         this->label = exp2->label;
@@ -879,8 +908,6 @@ ret void
         this->false_list = exp2->false_list;
         this->true_list = CodeBuffer::merge(exp1->true_list, exp2->true_list);
         this->label = exp2->label;
-        this->reg = generate_register->nextRegister("OR");
-        code_buffer.emit("%"+reg+" = or i1 %"+exp1->reg+", %"+exp2->reg);
         FUNC_OUT
         /**
         this->reg = generate_register->nextRegister();
@@ -942,7 +969,7 @@ ret void
         currinstr = code_buffer.emit(
                 "%" + this->reg + " = icmp " + convert_to_llvm_relop(relop->value) + " i32 %" + exp1->reg + ", %" +
                 exp2->reg);
-        currinstr = code_buffer.emit("br i1 %" + this->reg + ", label @, label @");
+        currinstr = code_buffer.emit("br i1 %" + this->reg + ", label @, label @ ; relop");
         this->true_list = CodeBuffer::makelist({currinstr, FIRST});
         this->false_list = CodeBuffer::makelist({currinstr, SECOND});
         this->label = code_buffer.genLabel();
@@ -1051,19 +1078,12 @@ ret void
                                           true_list(exp->true_list) {
         FUNC_IN
         TypeAssert(exp, TN_BOOL);
-        if (exp->value == "true" || exp->value == "false" || exp->value == "0" || exp->value == "1" ||
-            exp->value.empty() || exp->value == "null" || true) {
+        if (exp->value == "true" || exp->value == "false" || exp->value == "0" || exp->value == "1" || exp->value == "null") {
             currinstr = code_buffer.emit("br i1 %" + exp->reg + ", label @, label @");
             exp->true_list = code_buffer.merge(exp->true_list, code_buffer.makelist({currinstr, FIRST}));
             exp->false_list = code_buffer.merge(exp->false_list, code_buffer.makelist({currinstr, SECOND}));
             exp->label = code_buffer.genLabel();
         }
-        DO_DEBUG(
-                for(const auto&[a,b] : exp->true_list){
-                    cout<< "line:" << a << "\t b=" << b <<"\n";
-                }
-                cout << exp->label << '\n';
-                )
         code_buffer.bpatch(exp->true_list, exp->label);
         this->false_list = exp->false_list;
         this->true_list = exp->true_list;

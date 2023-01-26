@@ -79,7 +79,7 @@ Statement_   : LBRACE StartScope Statements_ MC RBRACE { $$ = new Statement( sta
 | WHILE LPAREN {start_while();} REDUCE_EXP RPAREN  {startScope();} Statement_ { $$ = new Statement( static_cast<While *>($1),static_cast<Exp *>($4)); end_while(static_cast<Exp *>($4), static_cast<Statement *>($7)); closeScope();}
 | BREAK SC { $$ = new Statement( static_cast<Break *>($1)); }
 | CONTINUE SC { $$ = new Statement( static_cast<Continue *>($1)); };
-Else_        : ELSE { $$ = new Else(); n = new N(false); startScope();}
+Else_        : ELSE { $$ = new Else(); n = new N(false, nullptr, n); startScope();}
 Call_      : ID LPAREN ExpList_ RPAREN {  $$ = new Call( static_cast<Id *>($1),static_cast<ExpList *>($3)); }
 | ID LPAREN RPAREN { $$ = new Call( static_cast<Id *>($1)); }
 ExpList_    : Exp_ {  $$ = new ExpList(  static_cast<Exp *>($1)); }
@@ -103,8 +103,8 @@ Exp_         : LPAREN Exp_ RPAREN { $$ = new Exp( static_cast<Exp *>($2)); }
 | NOT Exp_ { $$ = new Exp( static_cast<Not *>($1),static_cast<Exp *>($2)); }
 | Exp_ RELOP Exp_ {$$ = new Exp( static_cast<Exp *>($1),static_cast<Relop *>($2),static_cast<Exp *>($3)); }
 | Exp_ RELOP2 Exp_ { $$ = new Exp( static_cast<Exp *>($1),static_cast<Relop *>($2),static_cast<Exp *>($3)); }
-| Exp_ AND {n = new N(true,static_cast<Exp *>($1)); } Exp_ { $$ = new Exp( static_cast<Exp *>($1),static_cast<And *>($2),static_cast<Exp *>($4)); }
-| Exp_ OR {n = new N(true,static_cast<Exp *>($1)); } Exp_ { $$ = new Exp( static_cast<Exp *>($1),static_cast<Or *>($2),static_cast<Exp *>($4)); }
+| Exp_ AND {n = new N(true,static_cast<Exp *>($1), n); } Exp_ { $$ = new Exp( static_cast<Exp *>($1),static_cast<And *>($2),static_cast<Exp *>($4)); }
+| Exp_ OR {n = new N(true,static_cast<Exp *>($1), n); } Exp_ { $$ = new Exp( static_cast<Exp *>($1),static_cast<Or *>($2),static_cast<Exp *>($4)); }
 | LPAREN Type_ RPAREN Exp_ { $$ = new Exp( static_cast<Type *>($2),static_cast<Exp *>($4)); };
 
 StartScope: {startScope();};

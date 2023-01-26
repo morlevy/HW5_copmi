@@ -50,9 +50,10 @@ inline namespace grammar{
 
     struct N : public Node {
         vector<pair<int,BranchLabelIndex>> next_list;
-
+        void merge(N* n);
         std::string label;
-        N(bool branch = false,Exp* exp = nullptr);
+        std::vector<std::string> label_stack{};
+        N(bool branch = false,Exp* exp = nullptr, N* n = nullptr);
     };
 
     struct FuncDecl : public Node {

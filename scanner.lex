@@ -1,12 +1,12 @@
 %{
-    #include "Token.h"
-    #include <memory>
-    #include <stdio.h>
-    #define YYSTYPE Node*
-    #include "parser.tab.hpp"
-    #include "hw3_output.hpp"
+#include "Token.h"
+#include <memory>
+#include <stdio.h>
+#define YYSTYPE Node*
+#include "parser.tab.hpp"
+#include "hw3_output.hpp"
 
-    using namespace output;
+using namespace output;
 
 %}
 
