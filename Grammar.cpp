@@ -16,7 +16,6 @@ GenerateRegister *generate_register = new GenerateRegister();
 int curr_scope = 0;
 string current_function;
 int currinstr = 0;
-int while_ = 0;
 int num_args = 0;
 
 inline namespace grammar {
@@ -29,7 +28,7 @@ inline namespace grammar {
 
         code_buffer.emitGlobal("@.int_specifier = constant [4 x i8] c\"%d\\0A\\00\"");
         code_buffer.emitGlobal("@.str_specifier = constant [4 x i8] c\"%s\\0A\\00\"");
-        code_buffer.emitGlobal("@DavidThrowsZeroExcp = constant [22 x i8] c\"Error division by zero\"");
+        code_buffer.emitGlobal("@DavidThrowsZeroExcp = constant [24 x i8] c\"Error division by zero\\0A\\00\"");
 
         code_buffer.emitGlobal("define void @printi(i32) {");
         code_buffer.emitGlobal(
@@ -43,6 +42,14 @@ inline namespace grammar {
                 "call i32 (i8*, ...) @printf(i8* getelementptr ([4 x i8], [4 x i8]* @.str_specifier, i32 0, i32 0), i8* %0)");
         code_buffer.emitGlobal("ret void");
         code_buffer.emitGlobal("}");
+        code_buffer.emitGlobal(
+R"benjo(define void @error_division_by_zero() {
+call i32 (i8*, ...) @printf(i8* getelementptr ([24 x i8], [24 x i8]* @DavidThrowsZeroExcp, i32 0, i32 0))
+call void @exit(i32 0)
+ret void
+}
+)benjo"
+                );
         FUNC_OUT
         //
     }
@@ -332,14 +339,21 @@ inline namespace grammar {
         FUNC_OUT
     }
 
-    Statement::Statement(Type *type, Id *id) {
+    Statement::Statement(Type *type, Id *id) : Statement(type, id,
+                                                         type->type == TN_BYTE ? new Exp(new Num(0), new B()) :
+                                                         type->type == TN_INT  ? new Exp(new Num(0)) :
+                                                         type->type == TN_BOOL ? new Exp(new Boolean(false)) :
+                                                         new Exp(new String("")))
+    {
         FUNC_IN
+        /*
         if (idInSymbolTable(id->name)) {
             output::errorDef(yylineno, id->name);
             exit(0);
         }
         symbol_table->scopes.back().symbols.emplace_back(
                 new SymbolTable::SymbolData(symbol_table->offset_stack.back()++, id->name, type->type, ""));
+        */
         FUNC_OUT
     }
 
@@ -397,15 +411,33 @@ inline namespace grammar {
             FUNC_OUT
             exit(0);
         }
+        if(exp->type != TN_INT) {
+            auto oldreg = exp->reg;
+            exp->reg = generate_register->nextRegister();
+            code_buffer.emit("%" + exp->reg + " = zext " + convert_type_llvm(exp->type) + " %" + oldreg + " to i32");
+        }
+        std::string ptr = generate_register->nextRegister();
+        if (symbol_type->getOffset() < 0) {
+            currinstr = code_buffer.emit(
+                    "%" + ptr + " = getelementptr [ " + to_string(num_args) + " x i32], [ " + to_string(num_args) +
+                    " x i32]* %args, i32 0, i32 " + to_string(num_args + symbol_type->getOffset()));
+        } else {
+            currinstr = code_buffer.emit(
+                    "%" + ptr + " = getelementptr [ 50 x i32], [ 50 x i32]* %stack, i32 0, i32 " + to_string(symbol_type->getOffset()));
+        }
+        code_buffer.emit("store i32 %" + exp->reg + ", i32* %" + ptr);
         symbol_type->setRegister(exp->reg);
         symbol_type->setValue(exp->value);
+        code_buffer.bpatch(exp->false_list, exp->label);
+        code_buffer.bpatch(exp->true_list, exp->label);
+        code_buffer.bpatch(exp->next_list, exp->label);
         //this->next_list = CodeBuffer::makelist({currinstr + 1, FIRST});
         //this->value = generate_register->nextRegister();
         FUNC_OUT
     }
 
     Statement::Statement(Call *call) : next_list({}) {
-
+        CodeBuffer::instance().emit(call->calling_line);
     }
 
     Statement::Statement(Return *_return) {
@@ -430,9 +462,9 @@ inline namespace grammar {
         }
         if (function->getTypes().back() != exp->type) {
             output::errorMismatch(yylineno);
-
             exit(0);
         }
+        code_buffer.emit("ret " + convert_type_llvm(function->getTypes().back())+ " %" + exp->reg);
         FUNC_OUT
     }
 
@@ -477,29 +509,48 @@ inline namespace grammar {
         FUNC_OUT
     }
 
+    std::vector<std::string> while_stack_labels{};
+
     void start_while() {
-        while_++;
+        FUNC_IN
+        auto loc = code_buffer.emit("br label @");
+        auto w_label = code_buffer.genLabel();
+        code_buffer.bpatch(CodeBuffer::makelist({loc, FIRST}), w_label);
+        while_stack_labels.push_back(w_label);
+        FUNC_OUT
     }
 
-    void end_while() {
-        while_--;
+    void end_while(Exp *e, Statement *s) {
+        FUNC_IN
+        auto w_label = while_stack_labels.front();
+        code_buffer.emit("br label %" + w_label);
+        code_buffer.bpatch(CodeBuffer::merge(e->false_list, s->next_list), code_buffer.genLabel());
+        code_buffer.bpatch(s->true_list, w_label);
+        while_stack_labels.pop_back();
+        FUNC_OUT
     }
 
     Statement::Statement(Break *_break) {
         FUNC_IN
-        if (while_ <= 0) {
+        if (while_stack_labels.empty()) {
             output::errorUnexpectedBreak(yylineno);
             exit(0);
         }
+        int loc = code_buffer.emit("br label @");
+        code_buffer.genLabel();
+        this->next_list = CodeBuffer::makelist({loc, FIRST});
         FUNC_OUT
     }
 
     Statement::Statement(Continue *_continue) {
         FUNC_IN
-        if (while_ <= 0) {
+        if (while_stack_labels.empty()) {
             output::errorUnexpectedContinue(yylineno);
             exit(0);
         }
+        int loc = code_buffer.emit("br label @");
+        code_buffer.genLabel();
+        this->true_list = CodeBuffer::makelist({loc, FIRST});
         FUNC_OUT
     }
 
@@ -507,12 +558,18 @@ inline namespace grammar {
         FUNC_IN
         // << "arrived here 4 size is: " << s->next_list.size() << endl;
         this->next_list = s->next_list;
+        this->false_list = s->false_list;
+        this->true_list = s->true_list;
         // << "arrived here 5\n";
         FUNC_OUT
     }
 
     Call::Call(Id *id, ExpList *expList) : Typeable(TN_VOID) {
         FUNC_IN
+        DO_DEBUG(
+                cout << "\n-------------------------- CALL --------------------------\n\n";
+        )
+
         auto func = symbol_table->getFunctionSymbol(id->name);
         if (func == nullptr) {
             output::errorUndefFunc(yylineno, id->name);
@@ -544,8 +601,13 @@ inline namespace grammar {
             if (arg_type == TN_INT && exp.type == TN_BYTE) {
                 auto old_reg = exp.reg;
                 exp.reg = generate_register->nextRegister();
-                CodeBuffer::instance().emit("%" + exp.reg + " = zext i8" + old_reg + "to i32");
+                CodeBuffer::instance().emit("%" + exp.reg + " = zext i8 %" + old_reg + " to i32");
                 exp.type = TN_INT;
+            }
+            if(exp.type == TN_BOOL){
+                code_buffer.bpatch(exp.true_list, exp.label);
+                code_buffer.bpatch(exp.false_list, exp.label);
+                code_buffer.bpatch(exp.next_list, exp.label);
             }
             line += convert_type_llvm(exp.type) + "%" + exp.reg;
             if (i + 1 < func_types.size()) {
@@ -560,7 +622,9 @@ inline namespace grammar {
     Call::Call(Id *id) : Typeable(TN_VOID) {
         FUNC_IN
         auto func = symbol_table->getFunctionSymbol(id->name);
-
+        DO_DEBUG(
+                    cout << "\n-------------------------- CALL --------------------------\n\n";
+                )
         if (func == nullptr) {
             output::errorUndefFunc(yylineno, id->name);
             exit(0);
@@ -607,7 +671,7 @@ inline namespace grammar {
             exit(0);
         }
         this->type = symbol_data_opt->getTypes().back();
-        //this->value = symbol_data_opt->getName(); TODO maybe change the value
+        this->value = id->name; //symbol_data_opt->getName(); TODO maybe change the value
         this->reg = loadRegister(symbol_data_opt->getOffset(), symbol_data_opt->getTypes().back());
         FUNC_OUT
     }
@@ -620,13 +684,13 @@ inline namespace grammar {
         else{
             CodeBuffer::instance().emit(call->calling_line);
         }
+        value = call->calling_line;
     }
 
     Exp::Exp(Num *num) : Typeable(TN_INT), value(to_string(num->value)) {
         FUNC_IN
         //std::cout << "type is " << type << std::endl;
         this->reg = generate_register->nextRegister();
-        //this->value = to_string(num->value);
         currinstr = code_buffer.emit("%" + this->reg + " = add i32 0, " + value);
         FUNC_OUT
     }
@@ -639,14 +703,14 @@ inline namespace grammar {
             exit(0);
         }
         this->reg = generate_register->nextRegister();
-        currinstr = code_buffer.emit("%" + this->reg + " = add i8 0," + value);
+        currinstr = code_buffer.emit("%" + this->reg + " = add i8 0, " + value);
         FUNC_OUT
     }
 
     Exp::Exp(String *str) : Typeable(TN_STR), value(str->value) {
         FUNC_IN
         this->reg = generate_register->nextRegister();
-        code_buffer.emitGlobal("@" + reg + "= constant [" + to_string(value.size() - 2) + " x i8] c" + value);
+        code_buffer.emitGlobal("@" + reg + "= constant [" + to_string(value.size() - 2) + " x i8] c\"" + value + '\"');
         currinstr = code_buffer.emit(
                 "%" + reg + "= getelementptr [" + to_string(value.size() - 2) + " x i8], [" +
                 to_string(value.size() - 2) +
@@ -680,8 +744,8 @@ inline namespace grammar {
         } else {
             this->value = "0";
         }
-        //this->reg = generate_register->nextRegister();
-        //currinstr = code_buffer.emit("%" + this->reg + " = add i1 1," + exp->reg);
+        this->reg = generate_register->nextRegister();
+        currinstr = code_buffer.emit("%" + this->reg + " = add i1 1, %" + exp->reg);
         this->false_list = exp->true_list;
         this->true_list = exp->false_list;
         FUNC_OUT
@@ -703,7 +767,8 @@ inline namespace grammar {
 
         //int label_location = code_buffer.emit("br i1 %" + exp1->reg + ", label @, label @");
         //this->reg = generate_register->nextRegister();
-        this->reg = exp2->reg;
+        this->reg = generate_register->nextRegister("OR");
+        code_buffer.emit("%"+reg+" = or i1 %"+exp1->reg+", %"+exp2->reg);
         this->true_list = exp2->true_list;
         this->false_list = CodeBuffer::merge(exp1->false_list, exp2->false_list);
         this->label = exp2->label;
@@ -714,8 +779,6 @@ inline namespace grammar {
         string false_label = code_buffer.genLabel();
         int end_location = code_buffer.emit("br label @");
         string end_label = code_buffer.genLabel();
-
-
         currinstr = code_buffer.emit("%" + this->reg + " = phi i1 [%" + exp2->reg + ", %" + label->label_name + "],[0, %" + false_label + "]");
         code_buffer.bpatch(CodeBuffer::makelist({label->label_location, FIRST}), label->label_name);
         code_buffer.bpatch(CodeBuffer::makelist({label->label_location, SECOND}), false_label);
@@ -738,19 +801,17 @@ inline namespace grammar {
         this->false_list = exp2->false_list;
         this->true_list = CodeBuffer::merge(exp1->true_list, exp2->true_list);
         this->label = exp2->label;
-        this->reg = exp2->reg;
+        this->reg = generate_register->nextRegister("OR");
+        code_buffer.emit("%"+reg+" = or i1 %"+exp1->reg+", %"+exp2->reg);
         FUNC_OUT
         /**
         this->reg = generate_register->nextRegister();
         this->false_list = vector<pair<int, BranchLabelIndex>>();
         this->true_list = vector<pair<int, BranchLabelIndex>>();
-
         int true_location = code_buffer.emit("br label @");
         string true_label = code_buffer.genLabel();
         int end_location = code_buffer.emit("br label @");
         string end_label = code_buffer.genLabel();
-
-
         currinstr = code_buffer.emit("%" + this->reg + " = phi i1 [%" + exp2->reg + ", %" + label->label_name + "],[1, %" + true_label + "]");
         code_buffer.bpatch(CodeBuffer::makelist({label->label_location, FIRST}), true_label);
         code_buffer.bpatch(CodeBuffer::makelist({label->label_location, SECOND}), label->label_name);
@@ -786,14 +847,29 @@ inline namespace grammar {
         }
         this->reg = generate_register->nextRegister();
         //code_buffer.emit("relop value: " + to_string((relop->value)));
+        if(exp1->type != TN_INT){
+            auto oldreg = exp1->reg;
+            exp1->reg = generate_register->nextRegister();
+            code_buffer.emit("%"+exp1->reg + " = zext " + convert_type_llvm(exp1->type) + " %" + oldreg + " to i32");
+            exp1->type = TN_INT;
+        }
+
+        if(exp2->type != TN_INT){
+            auto oldreg = exp2->reg;
+            exp2->reg = generate_register->nextRegister();
+            code_buffer.emit(exp2->reg + " = zext " + convert_type_llvm(exp2->type) + " %" + oldreg + " to i32");
+            exp2->type = TN_INT;
+        }
+
         currinstr = code_buffer.emit(
                 "%" + this->reg + " = icmp " + convert_to_llvm_relop(relop->value) + " i32 %" + exp1->reg + ", %" +
                 exp2->reg);
         currinstr = code_buffer.emit("br i1 %" + this->reg + ", label @, label @");
         this->true_list = CodeBuffer::makelist({currinstr, FIRST});
         this->false_list = CodeBuffer::makelist({currinstr, SECOND});
-        //code_buffer.bpatch(this->true_list, );
         this->label = code_buffer.genLabel();
+        //this->value = "(" + exp1->value + relop->value + exp2->value + ")";
+        FUNC_OUT
     }
 
     Exp::Exp(Type *type, Exp *exp) : Typeable(type->type) {
@@ -809,7 +885,7 @@ inline namespace grammar {
     }
 
     Exp::Exp(Exp *exp) : Typeable(exp->type), reg(exp->reg), false_list(exp->false_list), true_list(exp->true_list),
-                         label(exp->label) {
+                         label(exp->label), value(exp->value) {
         FUNC_IN
         //code_buffer.emit("(exp)="+convert_type(exp->type));
         FUNC_OUT
@@ -843,8 +919,6 @@ inline namespace grammar {
         this->reg = generate_register->nextRegister();
         std::string reg_left = exp1->reg;
         std::string reg_right = exp2->reg;
-        //PRINT_PARAM(exp1->reg);
-        //PRINT_PARAM(exp2->reg);
         const bool is_any_int = exp1->type == TN_INT || exp2->type == TN_INT;
         const std::string exp_size = is_any_int ? "i32" : "i8";
         const std::string op = [&]() {
@@ -871,14 +945,18 @@ inline namespace grammar {
             reg_right = generate_register->nextRegister();
             currinstr = code_buffer.emit("%" + reg_right + " = zext i8 %" + exp2->reg + " to i32");
         }
+        this->value = "(" + exp1->value + " " + op + " " + exp2->value + ")";
+        PRINT_PARAM(value);
         if (binop->value == Binop::DIV) {
             // * division by zero
             const auto &reg1 = generate_register->nextRegister("div_by_zero");
-            currinstr = code_buffer.emit(reg1 + " = icmp eq " + exp_size + " " + exp2->reg + ", 0");
+            currinstr = code_buffer.emit("%" + reg1 + " = icmp eq " + convert_type_llvm(exp2->type) + " %" + exp2->reg + ", 0");
             const int need_back_patch = currinstr = code_buffer.emit("br i1 %" + reg1 + ", label @, label @");
             const std::string &yes_div_zero = code_buffer.genLabel();
             currinstr = code_buffer.emit("call void @error_division_by_zero()");
+            int loc = code_buffer.emit("br label @");
             const std::string &no_div_zero = code_buffer.genLabel();
+            code_buffer.bpatch(code_buffer.makelist({loc, FIRST}), no_div_zero);
             code_buffer.bpatch(std::vector{make_pair(need_back_patch, FIRST)}, yes_div_zero);
             code_buffer.bpatch(std::vector{make_pair(need_back_patch, SECOND)}, no_div_zero);
         }
@@ -892,12 +970,18 @@ inline namespace grammar {
         FUNC_IN
         TypeAssert(exp, TN_BOOL);
         if (exp->value == "true" || exp->value == "false" || exp->value == "0" || exp->value == "1" ||
-            exp->value == "" || exp->value == "null") {
-            currinstr = code_buffer.emit("br i1 %" + exp->reg + ", label @ , label @");
+            exp->value.empty() || exp->value == "null" || true) {
+            currinstr = code_buffer.emit("br i1 %" + exp->reg + ", label @, label @");
             exp->true_list = code_buffer.merge(exp->true_list, code_buffer.makelist({currinstr, FIRST}));
             exp->false_list = code_buffer.merge(exp->false_list, code_buffer.makelist({currinstr, SECOND}));
             exp->label = code_buffer.genLabel();
         }
+        DO_DEBUG(
+                for(const auto&[a,b] : exp->true_list){
+                    cout<< "line:" << a << "\t b=" << b <<"\n";
+                }
+                cout << exp->label << '\n';
+                )
         code_buffer.bpatch(exp->true_list, exp->label);
         this->false_list = exp->false_list;
         this->true_list = exp->true_list;

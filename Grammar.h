@@ -22,9 +22,6 @@ inline namespace grammar{
     void closeScope();
     void startScope();
 
-    void start_while();
-    void end_while();
-
     struct Program;
     struct Funcs;
     struct FuncDecl;
@@ -37,6 +34,9 @@ inline namespace grammar{
     struct Call;
     struct ExpList;
     struct Exp;
+
+    void start_while();
+    void end_while(Exp *exp, Statement *st);
 
     void end_function(RetType* ret);
 

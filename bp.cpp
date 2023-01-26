@@ -1,4 +1,5 @@
 #include "bp.hpp"
+#include "Macros.h"
 #include <vector>
 #include <iostream>
 #include <sstream>
@@ -24,6 +25,7 @@ string CodeBuffer::genLabel(){
 }
 
 int CodeBuffer::emit(const string &s){
+    PRINT_EMIT(s);
     buffer.push_back(s);
 	return buffer.size() - 1;
 }
@@ -32,7 +34,12 @@ void CodeBuffer::bpatch(const vector<pair<int,BranchLabelIndex>>& address_list, 
     for(vector<pair<int,BranchLabelIndex>>::const_iterator i = address_list.begin(); i != address_list.end(); i++){
     	int address = (*i).first;
     	BranchLabelIndex labelIndex = (*i).second;
+        PRINT_PARAM(buffer[address]);
+        PRINT_PARAM(label);
+        PRINT_PARAM(labelIndex);
 		replace(buffer[address], "@", "%" + label, labelIndex);
+        PRINT_PARAM(buffer[address]);
+
     }
 }
 
@@ -60,6 +67,7 @@ vector<pair<int,BranchLabelIndex>> CodeBuffer::merge(const vector<pair<int,Branc
 // ******** Methods to handle the global section ********** //
 void CodeBuffer::emitGlobal(const std::string& dataLine) 
 {
+    PRINT_EMIT_GLOBAL(dataLine);
 	globalDefs.push_back(dataLine);
 }
 
@@ -78,7 +86,7 @@ bool replace(string& str, const string& from, const string& to, const BranchLabe
 		pos = str.find_last_of(from);
 	}
 	else { //FIRST
-		pos = str.find_first_of(from);
+        pos = str.find_first_of(from);
 	}
     if (pos == string::npos)
         return false;

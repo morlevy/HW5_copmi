@@ -52,7 +52,7 @@ inline namespace lexical {
     }
 
     String::String(char * string) : value(string) {
-
+        value = value.substr(1, value.size() - 2) + R"(\00)";
     }
 
     Num::Num(int n) : value(n) {

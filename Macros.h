@@ -9,11 +9,12 @@
 #define HW3_DEBUG 0
 
 //Macro's flags
-#define LEXEME_IN_TOKEN  ((HW3_DEBUG) && 1)
-#define EXIT_PRINT_FLAG  ((HW3_DEBUG) && 1)
+#define LEXEME_IN_TOKEN  ((HW3_DEBUG) && 0)
+#define EXIT_PRINT_FLAG  ((HW3_DEBUG) && 0)
 #define PRINT_PARAM_FLAG ((HW3_DEBUG) && 1)
 #define DO_DEBUG_FLAG    ((HW3_DEBUG) && 1)
 #define FUNC_IN_OUT_FLAG ((HW3_DEBUG) && 1)
+#define PRINT_EMIT_FLAG  ((HW3_DEBUG) && 1)
 
 
 
@@ -30,7 +31,7 @@
 
 #if PRINT_PARAM_FLAG
 #define PRINT_PARAM(parameter) \
-    do {std::cout << "PRINT_PARAM:\t" #parameter " = " << parameter << '\n';} while(0);
+    do {std::cout << "PRINT_PARAM:\t" #parameter " = " << (parameter) << '\n';} while(0);
 #else
 #define PRINT_PARAM(parameter)
 #endif
@@ -51,5 +52,16 @@ do {std::cout << __PRETTY_FUNCTION__ << "<-- out <--" << '\n';} while(0);
 #define FUNC_IN
 #define FUNC_OUT
 #endif
+
+#if PRINT_EMIT_FLAG
+#define PRINT_EMIT(code) \
+do {std::cout << "LINE:\t" << code << '\n';} while(0);
+#define PRINT_EMIT_GLOBAL(code) \
+do {std::cout << "GLOB:\t" << code << '\n';} while(0);
+#else
+#define PRINT_EMIT(code)
+#define PRINT_EMIT_GLOBAL(code)
+#endif
+
 
 #endif //HW3_MACROS_H
