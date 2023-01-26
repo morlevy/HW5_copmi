@@ -367,24 +367,42 @@ ret void
             output::errorDef(yylineno, id->name);
             exit(0);
         }
-        this->value = generate_register->nextRegister();
         std::string expReg = exp->reg;
+        if(type->type == TN_BOOL && exp->value != "true" && exp->value != "false" && exp->value != "0" && exp->value != "1"){
+            expReg = generate_register->nextRegister();
+            currinstr = code_buffer.emit("br label @");
+            string ltrue = code_buffer.genLabel();
+            code_buffer.bpatch(CodeBuffer::merge(exp->true_list, CodeBuffer::makelist({currinstr, FIRST})), ltrue);
+            int true_line = code_buffer.emit("br label @");
+            string lfalse = code_buffer.genLabel();
+            code_buffer.bpatch(exp->false_list, lfalse);
+            int false_line = code_buffer.emit("br label @");
+            string phi = code_buffer.genLabel();
+            code_buffer.bpatch(CodeBuffer::makelist({true_line, FIRST}), phi);
+            code_buffer.bpatch(CodeBuffer::makelist({false_line, FIRST}), phi);
+            currinstr = code_buffer.emit("%"+expReg + " = phi i1 [ 1, %" + ltrue + "], [ 0, %" + lfalse + "]");
+            exp->reg = expReg;
+        }
+
+        this->value = generate_register->nextRegister();
+        Typename currType = exp->type;
         if (type->type == TN_INT && exp->type == TN_BYTE) {
             expReg = generate_register->nextRegister();
             currinstr = code_buffer.emit("%" + expReg + " = zext i8 %" + exp->reg + " to i32");
+            currType = TN_INT;
         }
-        currinstr = code_buffer.emit("%" + this->value + " = add " + convert_type_llvm(exp->type) + " 0,%" + expReg);
+        currinstr = code_buffer.emit("%" + this->value + " = add " + convert_type_llvm(currType) + " 0,%" + expReg);
         int offset = symbol_table->offset_stack.back()++;
         string ptr = generate_register->nextRegister();
         currinstr = code_buffer.emit("%" + ptr +
                                      " = getelementptr [50 x i32], [50 x i32]* %stack, i32 0, i32 " +
                                      to_string(offset));
         expReg = this->value;
-        if (exp->type != TN_INT) {
+        if (currType != TN_INT) {
             //%X = zext i8 %t3 to i32
             expReg = generate_register->nextRegister();
             currinstr = code_buffer.emit(
-                    "%" + expReg + " = zext " + convert_type_llvm(exp->type) + " %" + this->value + " to i32");
+                    "%" + expReg + " = zext " + convert_type_llvm(currType) + " %" + this->value + " to i32");
         }
         currinstr = code_buffer.emit("store i32 %" + expReg + ", i32* %" + ptr);
         exp->reg = expReg;
@@ -437,11 +455,13 @@ ret void
     }
 
     Statement::Statement(Call *call) : next_list({}) {
-        CodeBuffer::instance().emit(call->calling_line);
+        currinstr = CodeBuffer::instance().emit(call->calling_line);
+        //next_list = CodeBuffer::makelist({currinstr + 1, FIRST});
     }
 
     Statement::Statement(Return *_return) {
         FUNC_IN
+        currinstr = code_buffer.emit("ret void");
         SymbolTable::SymbolData *function = symbol_table->getSymbol(current_function);
         if (function == nullptr) {//shouldnt get inside
             EXIT_PRINT(0);
@@ -464,7 +484,23 @@ ret void
             output::errorMismatch(yylineno);
             exit(0);
         }
-        code_buffer.emit("ret " + convert_type_llvm(function->getTypes().back())+ " %" + exp->reg);
+        string temp_reg = exp->reg;
+        if(exp->type == TN_BOOL && exp->value != "true" && exp->value != "false" && exp->value != "0" && exp->value != "1") {
+            temp_reg = generate_register->nextRegister();
+            currinstr = code_buffer.emit("br label @");
+            string ltrue = code_buffer.genLabel();
+            code_buffer.bpatch(CodeBuffer::merge(exp->true_list, CodeBuffer::makelist({currinstr, FIRST})), ltrue);
+            int true_line = code_buffer.emit("br label @");
+            string lfalse = code_buffer.genLabel();
+            code_buffer.bpatch(exp->false_list, lfalse);
+            int false_line = code_buffer.emit("br label @");
+            string phi = code_buffer.genLabel();
+            code_buffer.bpatch(CodeBuffer::makelist({true_line, FIRST}), phi);
+            code_buffer.bpatch(CodeBuffer::makelist({false_line, FIRST}), phi);
+            currinstr = code_buffer.emit("%"+temp_reg + " = phi i1 [ 1, %" + ltrue + "], [ 0, %" + lfalse + "]");
+
+        }
+        code_buffer.emit("ret " + convert_type_llvm(function->getTypes().back())+ " %" + temp_reg);
         FUNC_OUT
     }
 
@@ -478,8 +514,9 @@ ret void
         ////<< "arrived here 2\n";
 
         currinstr = code_buffer.emit("br label @");
+        string label = code_buffer.genLabel();
         code_buffer.bpatch(CodeBuffer::merge(exp->false_list, CodeBuffer::makelist({currinstr, FIRST})),
-                           code_buffer.genLabel());
+                           label);
         FUNC_OUT
     }
 
@@ -548,9 +585,9 @@ ret void
             output::errorUnexpectedContinue(yylineno);
             exit(0);
         }
-        int loc = code_buffer.emit("br label @");
-        code_buffer.genLabel();
-        this->true_list = CodeBuffer::makelist({loc, FIRST});
+        int loc = code_buffer.emit("br label %" + while_stack_labels.front());
+        //code_buffer.genLabel();
+        //this->true_list = CodeBuffer::makelist({loc, FIRST});
         FUNC_OUT
     }
 
@@ -648,12 +685,46 @@ ret void
     ExpList::ExpList(Exp *exp) {
         FUNC_IN
         exp_list.push_back(exp);
+        if(exp->type == TN_BOOL && exp->value != "true" && exp->value != "false" && exp->value != "0" && exp->value != "1"){
+            int first = code_buffer.emit("br label @");
+            string ltrue = code_buffer.genLabel();
+            code_buffer.bpatch(exp->true_list, ltrue);
+            int second = code_buffer.emit("br label @");
+            string false_label = code_buffer.genLabel();
+            code_buffer.bpatch(exp->false_list, false_label);
+            int third = code_buffer.emit("br label @");
+            std::string phi = code_buffer.genLabel();
+            code_buffer.bpatch(CodeBuffer::makelist({second, FIRST}), phi);
+            code_buffer.bpatch(CodeBuffer::makelist({third, FIRST}), phi);
+            exp->reg = generate_register->nextRegister();
+            currinstr = code_buffer.emit("%"+exp->reg + " = phi i1 [ 1, %" + ltrue + "], [ 0, %" + false_label + "]");
+            currinstr = code_buffer.emit("br label %" + exp->label);
+            string jump_label = code_buffer.genLabel();
+            code_buffer.bpatch(CodeBuffer::makelist({first, FIRST}), jump_label);
+        }
         FUNC_OUT
     }
 
     ExpList::ExpList(Exp *exp, ExpList *expList) {
         FUNC_IN
         exp_list.push_back(exp);
+        if(exp->type == TN_BOOL && exp->value != "true" && exp->value != "false" && exp->value != "0" && exp->value != "1"){
+            int first = code_buffer.emit("br label @");
+            string ltrue = code_buffer.genLabel();
+            code_buffer.bpatch(exp->true_list, ltrue);
+            int second = code_buffer.emit("br label @");
+            string false_label = code_buffer.genLabel();
+            code_buffer.bpatch(exp->false_list, false_label);
+            int third = code_buffer.emit("br label @");
+            std::string phi = code_buffer.genLabel();
+            code_buffer.bpatch(CodeBuffer::makelist({second, FIRST}), phi);
+            code_buffer.bpatch(CodeBuffer::makelist({third, FIRST}), phi);
+            exp->reg = generate_register->nextRegister();
+            currinstr = code_buffer.emit("%"+exp->reg + " = phi i1 [ 1, %" + ltrue + "], [ 0, %" + false_label + "]");
+            currinstr = code_buffer.emit("br label %" + exp->label);
+            string jump_label = code_buffer.genLabel();
+            code_buffer.bpatch(CodeBuffer::makelist({first, FIRST}), jump_label);
+        }
         exp_list.insert(exp_list.end(), expList->exp_list.begin(), expList->exp_list.end());
         FUNC_OUT
     }
@@ -673,6 +744,12 @@ ret void
         this->type = symbol_data_opt->getTypes().back();
         this->value = id->name; //symbol_data_opt->getName(); TODO maybe change the value
         this->reg = loadRegister(symbol_data_opt->getOffset(), symbol_data_opt->getTypes().back());
+        if(this->type == TN_BOOL && this->value != "true" && this->value != "false" && this->value != "0" && this->value != "1"){
+            currinstr = code_buffer.emit("br i1 %" + this->reg + ", label @, label @");
+            this->true_list = CodeBuffer::merge(this->true_list, CodeBuffer::makelist({currinstr, FIRST}));
+            this->false_list = CodeBuffer::merge(this->false_list, CodeBuffer::makelist({currinstr, SECOND}));
+            this->label = code_buffer.genLabel();
+        }
         FUNC_OUT
     }
 
@@ -767,6 +844,7 @@ ret void
 
         //int label_location = code_buffer.emit("br i1 %" + exp1->reg + ", label @, label @");
         //this->reg = generate_register->nextRegister();
+        //TODO why
         this->reg = generate_register->nextRegister("OR");
         code_buffer.emit("%"+reg+" = or i1 %"+exp1->reg+", %"+exp2->reg);
         this->true_list = exp2->true_list;
@@ -857,7 +935,7 @@ ret void
         if(exp2->type != TN_INT){
             auto oldreg = exp2->reg;
             exp2->reg = generate_register->nextRegister();
-            code_buffer.emit(exp2->reg + " = zext " + convert_type_llvm(exp2->type) + " %" + oldreg + " to i32");
+            code_buffer.emit("%"+exp2->reg + " = zext " + convert_type_llvm(exp2->type) + " %" + oldreg + " to i32");
             exp2->type = TN_INT;
         }
 
@@ -921,7 +999,7 @@ ret void
         std::string reg_right = exp2->reg;
         const bool is_any_int = exp1->type == TN_INT || exp2->type == TN_INT;
         const std::string exp_size = is_any_int ? "i32" : "i8";
-        const std::string op = [&]() {
+        std::string op = [&]() {
             switch (binop->value) {
                 case Binop::BinopValue::ADD:
                     return "add";
@@ -937,6 +1015,7 @@ ret void
             }
             return "";
         }();
+
         if (is_any_int && exp1->type == TN_BYTE) {
             reg_left = generate_register->nextRegister();
             currinstr = code_buffer.emit("%" + reg_left + " = zext i8 %" + exp1->reg + " to i32");
@@ -959,6 +1038,9 @@ ret void
             code_buffer.bpatch(code_buffer.makelist({loc, FIRST}), no_div_zero);
             code_buffer.bpatch(std::vector{make_pair(need_back_patch, FIRST)}, yes_div_zero);
             code_buffer.bpatch(std::vector{make_pair(need_back_patch, SECOND)}, no_div_zero);
+            if(exp_size == "i8"){
+                op = "udiv";
+            }
         }
         currinstr = code_buffer.emit(
                 "%" + this->reg + " = " + op + " " + exp_size + " %" + reg_left + ", %" + reg_right);
